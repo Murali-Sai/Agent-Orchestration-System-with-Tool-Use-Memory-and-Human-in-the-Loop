@@ -74,3 +74,27 @@ CREATE INDEX IF NOT EXISTS idx_tasks_created   ON tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_task ON tool_calls(task_id);
 CREATE INDEX IF NOT EXISTS idx_hitl_task       ON hitl_events(task_id);
 CREATE INDEX IF NOT EXISTS idx_hitl_status     ON hitl_events(status);
+
+-- ============================================================
+-- Row-Level Security
+-- ------------------------------------------------------------
+-- RLS is enabled on every table so access is policy-controlled
+-- (Supabase flags tables without RLS as publicly exposed).
+-- This demo uses a single shared anon key, so the policies grant
+-- that key full access. For a real multi-tenant deployment you'd
+-- replace `USING (true)` with `auth.uid() = user_id` style checks.
+-- ============================================================
+ALTER TABLE tasks       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tool_calls  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hitl_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS demo_access_tasks       ON tasks;
+DROP POLICY IF EXISTS demo_access_tool_calls  ON tool_calls;
+DROP POLICY IF EXISTS demo_access_hitl_events ON hitl_events;
+
+CREATE POLICY demo_access_tasks       ON tasks
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY demo_access_tool_calls  ON tool_calls
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY demo_access_hitl_events ON hitl_events
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Optional
 import structlog
 
@@ -182,7 +183,7 @@ def resolve_hitl_event(event_id: str, approved: bool,
             "status":          "approved" if approved else "rejected",
             "human_response":  response,
             "modified_output": modified_output,
-            "resolved_at":     "now()",
+            "resolved_at":     datetime.now(timezone.utc).isoformat(),
         }).eq("id", event_id).execute()
         return True
     except Exception as e:
