@@ -13,6 +13,10 @@ except ImportError:
 
 _QUEUE_KEY = "hitl:queue"
 _RESOLVED_KEY = "hitl:resolved"
+_CHAT_PREFIX = "hitl:chat:"
+
+# In-memory fallback for chat messages when Redis is unavailable
+_local_chats: dict[str, list[dict]] = {}
 
 
 class ApprovalQueue:
@@ -78,6 +82,34 @@ class ApprovalQueue:
                     self._local_resolved.append(item)
                     return True
             return False
+
+    def add_message(self, item_id: str, role: str, message: str) -> bool:
+        """Append a chat message to a HITL item. Returns False if item not found."""
+        msg = {"role": role, "message": message, "ts": time.time()}
+        chat_key = f"{_CHAT_PREFIX}{item_id}"
+
+        if self._client:
+            # Verify item exists
+            raw_items = self._client.lrange(_QUEUE_KEY, 0, -1)
+            if not any(json.loads(r)["id"] == item_id for r in raw_items):
+                return False
+            self._client.rpush(chat_key, json.dumps(msg))
+            self._client.expire(chat_key, 86400 * 7)  # 7-day TTL
+            return True
+        else:
+            # In-memory fallback — accept any item_id
+            if item_id not in _local_chats:
+                _local_chats[item_id] = []
+            _local_chats[item_id].append(msg)
+            return True
+
+    def get_messages(self, item_id: str) -> list[dict]:
+        """Retrieve the full chat thread for a HITL item."""
+        chat_key = f"{_CHAT_PREFIX}{item_id}"
+        if self._client:
+            raw = self._client.lrange(chat_key, 0, -1)
+            return [json.loads(r) for r in raw]
+        return _local_chats.get(item_id, [])
 
     def get_resolved(self, limit: int = 50) -> list[dict]:
         if self._client:

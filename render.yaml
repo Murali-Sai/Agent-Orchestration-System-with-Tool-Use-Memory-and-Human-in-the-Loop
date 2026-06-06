@@ -1,0 +1,88 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Render Blueprint — Agent Orchestration System
+#   Deploys three resources on Render's free tier:
+#     • aos-redis : Key Value (Redis) instance for working memory + HITL queue
+#     • aos-api   : FastAPI backend (Docker)
+#     • aos-ui    : Streamlit frontend (Docker)
+#
+# Celery worker + Flower from docker-compose are intentionally omitted here:
+# Render's free tier has no background workers, and the API automatically falls
+# back to in-process threads for async task dispatch (see api/main._dispatch_task).
+# To run the async stack, switch the worker to a paid Background Worker service.
+#
+# Notes / free-tier trade-offs (all acceptable for a portfolio demo):
+#   • Free web services spin down after 15 min idle (~1 min cold start).
+#   • Key Value is in-memory only — working memory resets on restart.
+#   • No persistent disk on free tier — ChromaDB long-term memory is ephemeral
+#     and resets on redeploy/restart. For durable memory, attach a disk on a
+#     paid plan or point CHROMA_PERSIST_DIR at an external vector store.
+#   • If the API OOMs on free (512 MB), bump `plan: free` → `standard` on aos-api.
+# ────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── Redis (working memory + HITL approval queue) ──────────────────────────
+  - name: aos-redis
+    type: keyvalue
+    plan: free
+    region: oregon
+    ipAllowList: []          # empty = internal connections only (most secure)
+
+  # ── FastAPI backend ───────────────────────────────────────────────────────
+  - name: aos-api
+    type: web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY      # REQUIRED — set in Render dashboard (secret)
+        sync: false
+      - key: ANTHROPIC_API_KEY   # optional — enables Claude routing for writing
+        sync: false
+      - key: TAVILY_API_KEY      # optional — better web search (else DuckDuckGo)
+        sync: false
+      - key: SUPABASE_URL        # optional — durable task/audit persistence
+        sync: false
+      - key: SUPABASE_ANON_KEY   # optional
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          name: aos-redis
+          type: keyvalue
+          property: connectionString
+      - key: CHROMA_PERSIST_DIR
+        value: /app/chroma_db
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+  # ── Streamlit UI ──────────────────────────────────────────────────────────
+  - name: aos-ui
+    type: web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerCommand: >-
+      streamlit run ui/app.py
+      --server.port $PORT
+      --server.address 0.0.0.0
+      --server.headless true
+      --server.enableCORS false
+      --server.enableXsrfProtection false
+    healthCheckPath: /_stcore/health
+    autoDeploy: true
+    envVars:
+      - key: API_URL            # resolves to the API's hostname; UI prepends https://
+        fromService:
+          name: aos-api
+          type: web
+          property: host

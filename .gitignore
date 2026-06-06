@@ -10,3 +10,12 @@ dist/
 build/
 .venv/
 venv/
+
+# Local dev / debug artifacts
+*.log
+api_out.txt
+api_err.txt
+sl_out.txt
+sl_err.txt
+streamlit.log
+streamlit_err.log

@@ -17,3 +17,7 @@ RUN mkdir -p /app/workspace /app/chroma_db
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+
+# Default command — override in docker-compose / render.yaml as needed.
+# Shell form so ${PORT} (injected by Render) is expanded; falls back to 8000 locally.
+CMD uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}

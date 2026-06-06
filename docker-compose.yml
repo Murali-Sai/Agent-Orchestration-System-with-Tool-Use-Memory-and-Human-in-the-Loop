@@ -1,4 +1,7 @@
 services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────── #
+
   redis:
     image: redis:7-alpine
     ports:
@@ -10,6 +13,23 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8888:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - ALLOW_RESET=true
+      - ANONYMIZED_TELEMETRY=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Application services ─────────────────────────────────────────────── #
 
   api:
     build: .
@@ -26,12 +46,55 @@ services:
       - CHROMA_PERSIST_DIR=/app/chroma_db
       - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.6}
       - QUALITY_THRESHOLD=${QUALITY_THRESHOLD:-0.65}
+      - MAX_RETRIES=${MAX_RETRIES:-2}
+      - PRIMARY_MODEL=${PRIMARY_MODEL:-gpt-4o}
+      - FAST_MODEL=${FAST_MODEL:-gpt-4o-mini}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8501}
+      - USE_CELERY=true   # real workers run in this compose stack
     volumes:
       - chroma_data:/app/chroma_db
       - workspace_data:/app/workspace
     depends_on:
       redis:
         condition: service_healthy
+    restart: unless-stopped
+
+  celery_worker:
+    build: .
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_PERSIST_DIR=/app/chroma_db
+      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.6}
+      - QUALITY_THRESHOLD=${QUALITY_THRESHOLD:-0.65}
+      - MAX_RETRIES=${MAX_RETRIES:-2}
+      - PRIMARY_MODEL=${PRIMARY_MODEL:-gpt-4o}
+      - FAST_MODEL=${FAST_MODEL:-gpt-4o-mini}
+    volumes:
+      - chroma_data:/app/chroma_db
+      - workspace_data:/app/workspace
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2   # scale with: docker compose up --scale celery_worker=4
+
+  flower:
+    build: .
+    command: celery -A workers.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - celery_worker
     restart: unless-stopped
 
   ui:

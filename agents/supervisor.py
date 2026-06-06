@@ -3,7 +3,7 @@ import json
 import uuid
 import time
 from graph.state import AgentState, SubTask
-from agents.base import llm_call, trace_event
+from agents.base import llm_call, trace_event, token_cost_usd
 from memory.longterm import LongTermMemory
 from config.settings import get_settings
 
@@ -61,8 +61,10 @@ def plan_task(state: AgentState, ltm: LongTermMemory) -> AgentState:
 
     prompt = f"User request: {request}{memory_ctx}\n\nCreate an execution plan."
 
-    content, tokens = llm_call(_SYSTEM, [{"role": "user", "content": prompt}])
+    model = settings.primary_model
+    content, tokens = llm_call(_SYSTEM, [{"role": "user", "content": prompt}], model=model)
     state["total_tokens"] += tokens
+    state["model_usage"][model] = state["model_usage"].get(model, 0) + tokens
 
     try:
         parsed = json.loads(content)
@@ -109,20 +111,32 @@ def synthesize_results(state: AgentState, ltm: LongTermMemory) -> AgentState:
         for st in completed if st.get("result")
     )
 
+    model = settings.primary_model
     content, tokens = llm_call(
         _SYNTHESIS_SYSTEM,
         [{"role": "user", "content": f"ORIGINAL REQUEST:\n{state['original_request']}\n\nSPECIALIST OUTPUTS:\n{results_ctx}"}],
+        model=model,
         max_tokens=6000,
     )
     state["total_tokens"] += tokens
+    state["model_usage"][model] = state["model_usage"].get(model, 0) + tokens
     state["final_output"] = content
     state["status"] = "reviewing"
 
-    # Persist to long-term memory
+    # Persist to long-term memory with importance score
     tools_used = list({tc["tool"] for st in completed for tc in st.get("tool_calls", [])})
+    complexity_weight = {"low": 0.5, "medium": 0.75, "high": 1.0}
+    avg_complexity = sum(complexity_weight.get(s.get("complexity", "medium"), 0.75) for s in completed) / max(len(completed), 1)
+    importance = round(state.get("reviewer_score", 0.5) * avg_complexity, 3)
     ltm.save(
         f"Task: {state['original_request'][:200]} | Specialists: {[s['specialist'] for s in completed]} | Tools: {tools_used} | Confidence: {state['plan_confidence']}",
-        metadata={"task_id": state["task_id"], "user_id": state["user_id"]},
+        metadata={
+            "task_id": state["task_id"],
+            "user_id": state["user_id"],
+            "importance": str(importance),
+            "reviewer_score": str(state.get("reviewer_score", 0.5)),
+            "tool_count": str(len(tools_used)),
+        },
     )
 
     trace_event(state, "supervisor", "synthesis_done", {"output_len": len(content)})

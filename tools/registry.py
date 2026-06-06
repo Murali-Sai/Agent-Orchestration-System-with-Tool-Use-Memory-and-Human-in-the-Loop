@@ -126,6 +126,8 @@ def _register_defaults(registry: ToolRegistry) -> None:
     from tools.web_search import web_search
     from tools.code_executor import execute_python
     from tools.file_tools import read_file, write_file
+    from tools.db_query import db_query, db_list_tables
+    from tools.http_call import http_call
 
     registry.register(
         "web_search",
@@ -154,4 +156,25 @@ def _register_defaults(registry: ToolRegistry) -> None:
         write_file,
         allowed_agents=["writing", "code"],
         rate_limit=0,
+    )
+    registry.register(
+        "db_query",
+        "Execute a read-only SELECT query against the agent SQLite database and return rows as JSON.",
+        db_query,
+        allowed_agents=["analysis", "research", "code"],
+        rate_limit=60,
+    )
+    registry.register(
+        "db_list_tables",
+        "List all tables available in the agent database.",
+        db_list_tables,
+        allowed_agents=[],  # all agents
+        rate_limit=0,
+    )
+    registry.register(
+        "http_call",
+        "Make an HTTP GET or POST request to an external API and return the response body.",
+        http_call,
+        allowed_agents=["research", "code", "analysis"],
+        rate_limit=20,
     )

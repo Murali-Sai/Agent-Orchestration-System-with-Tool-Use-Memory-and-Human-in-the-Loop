@@ -1,4 +1,4 @@
-# Multi-Agent Orchestration System
+# Agent Orchestration System with Tool Use, Memory, and Human-in-the-Loop
 
 > Production-grade multi-agent platform where a supervisor AI decomposes complex tasks, dispatches specialized agents with real tools, maintains persistent memory across sessions, and escalates to humans when confidence is low — with full observability into every decision.
 
@@ -92,10 +92,10 @@ Persistent layer:
 
 ### 1. Clone and configure
 ```bash
-git clone git@github.com:Murali-Sai/Multi-Agent-Orchestration-System.git
-cd Multi-Agent-Orchestration-System
+git clone https://github.com/Murali-Sai/Agent-Orchestration-System-with-Tool-Use-Memory-and-Human-in-the-Loop.git
+cd Agent-Orchestration-System-with-Tool-Use-Memory-and-Human-in-the-Loop
 cp .env.example .env
-# Edit .env — add OPENAI_API_KEY and SUPABASE_URL + SUPABASE_ANON_KEY
+# Edit .env — add OPENAI_API_KEY (and optionally SUPABASE_URL + SUPABASE_ANON_KEY)
 ```
 
 ### 2. Set up Supabase
@@ -114,6 +114,96 @@ docker-compose up --build
 | Streamlit UI | http://localhost:8501 |
 | FastAPI | http://localhost:8000 |
 | API Docs | http://localhost:8000/docs |
+| Flower (Celery) | http://localhost:5555 |
+
+---
+
+## Quick Start — Try It Now
+
+### Option 1: Automated demo script
+```bash
+python demo.py
+```
+Submits a showcase task, streams live progress, and prints a formatted summary.
+
+### Option 2: cURL
+```bash
+# Submit a task
+curl -s -X POST http://localhost:8000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"request": "Research the top 3 AI agent frameworks and write a comparison brief.", "user_id": "demo"}' \
+  | jq .
+
+# Returns: {"task_id": "abc123", "status": "started"}
+
+# Poll for status (replace abc123 with your task_id)
+curl -s http://localhost:8000/tasks/abc123 | jq '{status, reviewer_score, cost_usd, total_tokens}'
+
+# Get the full trace
+curl -s http://localhost:8000/tasks/abc123/trace | jq '.trace[] | {agent, action}'
+
+# Get step-through checkpoints
+curl -s http://localhost:8000/tasks/abc123/checkpoints | jq '.checkpoints[] | {step, label, agent}'
+
+# View aggregate analytics
+curl -s http://localhost:8000/stats/aggregate | jq .
+```
+
+### Option 3: Python
+```python
+import requests, time
+
+# Submit
+r = requests.post("http://localhost:8000/tasks", json={
+    "request": "Analyse the pros and cons of microservices vs monolith for a startup.",
+    "user_id": "demo"
+})
+task_id = r.json()["task_id"]
+
+# Poll until done
+while True:
+    state = requests.get(f"http://localhost:8000/tasks/{task_id}").json()
+    if state["status"] in ("done", "failed", "escalated"):
+        break
+    time.sleep(3)
+
+print(state["final_output"])
+print(f"Cost: ${state['cost_usd']:.4f}  Score: {state['reviewer_score']:.2f}")
+```
+
+---
+
+## Deploy to the Cloud (Render)
+
+The repo ships a [`render.yaml`](render.yaml) Blueprint that provisions the whole
+stack on [Render](https://render.com) in one click — no servers to manage.
+
+**What it creates** (all on Render's free tier):
+
+| Resource | Type | Notes |
+|---|---|---|
+| `aos-api` | Docker web service | FastAPI backend, health-checked at `/health` |
+| `aos-ui` | Docker web service | Streamlit UI, auto-wired to the API |
+| `aos-redis` | Key Value (Redis) | Working memory + HITL queue |
+
+**Steps**
+
+1. Push this repo to your GitHub account (already done if you cloned it there).
+2. In Render: **New → Blueprint**, then select this repository. Render reads
+   `render.yaml` and previews the three resources.
+3. Set the one required secret when prompted: **`OPENAI_API_KEY`**.
+   (Optional: `ANTHROPIC_API_KEY`, `TAVILY_API_KEY`, `SUPABASE_URL`,
+   `SUPABASE_ANON_KEY`.)
+4. Click **Apply**. First build takes ~5–10 min. When live, open the `aos-ui`
+   URL — it auto-connects to the API.
+
+**Free-tier trade-offs** (fine for a demo, documented in `render.yaml`):
+- Services spin down after 15 min idle (~1 min cold start on next request).
+- Redis and ChromaDB memory are **ephemeral** — they reset on restart, since
+  free instances have no persistent disk. For durable memory, attach a disk on a
+  paid plan (and add Supabase for durable task/audit history).
+- Celery/Flower are omitted (no free background workers); the API runs tasks in
+  in-process threads automatically. Add a paid Background Worker to enable Celery.
 
 ---
 
@@ -124,6 +214,15 @@ Three-layer agent design: Supervisor plans, Specialists execute, Reviewer valida
 
 ### Tool Registry
 All tools are registered with name, description, per-agent permissions, and rate limits. Every invocation is logged with inputs, outputs, latency, and success/failure — persisted to Supabase.
+
+| Tool | Agents | Description |
+|---|---|---|
+| `web_search` | research, supervisor | Tavily / DuckDuckGo search |
+| `execute_python` | code, analysis | Sandboxed Python execution |
+| `read_file` / `write_file` | all / writing, code | Workspace-sandboxed file I/O |
+| `db_query` | analysis, research, code | Read-only SQL against the agent SQLite DB |
+| `db_list_tables` | all | List available database tables |
+| `http_call` | research, code, analysis | Generic HTTP/REST API calls (SSRF-protected) |
 
 ### Two-Tier Memory
 - **Working memory (Redis)**: Per-task shared state for live execution progress

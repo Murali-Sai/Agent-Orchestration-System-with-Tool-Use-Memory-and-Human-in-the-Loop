@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import re
 from graph.state import AgentState
-from agents.base import llm_call, trace_event
+from agents.base import llm_call, trace_event, route_model
 
 _SYSTEM = """You are the Reviewer Agent. You evaluate the quality of the synthesized output against the original request.
 
@@ -31,7 +31,9 @@ def review_output(state: AgentState) -> AgentState:
         f"SYNTHESIZED OUTPUT:\n{state['final_output']}"
     )
 
-    content, tokens = llm_call(_SYSTEM, [{"role": "user", "content": prompt}], temperature=0.1)
+    model = route_model("reviewer")
+    content, tokens = llm_call(_SYSTEM, [{"role": "user", "content": prompt}], model=model, temperature=0.1)
+    state["model_usage"][model] = state["model_usage"].get(model, 0) + tokens
     state["total_tokens"] += tokens
 
     try:

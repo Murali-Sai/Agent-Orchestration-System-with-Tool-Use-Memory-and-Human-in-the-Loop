@@ -27,9 +27,15 @@ beautifulsoup4>=4.12.0
 # UI
 streamlit>=1.40.0
 streamlit-autorefresh>=1.0.1
+plotly>=5.24.0
+pandas>=2.2.0
 
 # Database
 supabase>=2.0.0
+
+# Async task queue
+celery[redis]>=5.3.0
+flower>=2.0.0
 
 # Utilities
 python-dotenv>=1.0.0

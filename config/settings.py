@@ -24,11 +24,17 @@ class Settings(BaseSettings):
     quality_threshold: float = 0.65
     max_retries: int = 2
 
+    # Async dispatch — only enable when a Celery worker is actually running
+    # (e.g. docker-compose). Without a worker, jobs enqueue to Redis but never
+    # run, so this MUST stay False on hosts with Redis but no worker (Render free).
+    use_celery: bool = False
+
     # App
     app_env: str = "development"
     log_level: str = "INFO"
     api_port: int = 8000
     ui_port: int = 8501
+    cors_origins: str = "*"   # comma-separated; "*" for dev, restrict for prod
 
     # Models
     primary_model: str = "gpt-4o"

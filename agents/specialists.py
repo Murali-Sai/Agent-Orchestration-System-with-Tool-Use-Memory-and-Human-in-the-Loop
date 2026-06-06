@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from graph.state import AgentState, SubTask
-from agents.base import llm_call, trace_event
+from agents.base import llm_call, trace_event, route_model
 from tools.registry import get_registry
 
 _SPECIALIST_SYSTEMS = {
@@ -43,12 +43,13 @@ def run_specialist(state: AgentState, subtask: SubTask) -> SubTask:
         "content": f"TASK: {subtask['description']}\nEXPECTED OUTPUT: {subtask['expected_output']}\n{dep_context}",
     }]
 
+    model = route_model(specialist, subtask.get("complexity"))
     tool_calls: list[dict] = []
     total_tokens = 0
     final_result = ""
 
     for round_num in range(_MAX_TOOL_ROUNDS):
-        content, tokens = llm_call(system_prompt, messages, max_tokens=4096)
+        content, tokens = llm_call(system_prompt, messages, model=model, max_tokens=4096)
         total_tokens += tokens
 
         # Check if agent wants to call a tool
@@ -71,6 +72,7 @@ def run_specialist(state: AgentState, subtask: SubTask) -> SubTask:
     subtask["tool_calls"] = tool_calls
     state["total_tokens"] += total_tokens
     state["total_tool_calls"] += len(tool_calls)
+    state["model_usage"][model] = state["model_usage"].get(model, 0) + total_tokens
 
     trace_event(state, specialist, "subtask_done", {
         "subtask_id": subtask["id"],

@@ -59,4 +59,8 @@ class AgentState(TypedDict):
     trace: list[dict]               # append-only event log
     total_tokens: int
     total_tool_calls: int
+    model_usage: dict[str, int]     # model_name → tokens used
+    cost_usd: float                 # estimated dollar cost
+    wall_time_s: float              # total wall-clock execution time
+    started_at: float               # unix timestamp when task started
     errors: list[str]
