@@ -284,12 +284,23 @@ def pipeline_html(plan: list) -> str:
     return f'<div class="pipeline">{"".join(chips)}</div>'
 
 
-def _api(path: str, method="GET", **kwargs):
+def _api(path: str, method="GET", timeout=10, **kwargs):
     try:
         fn = getattr(requests, method.lower())
-        return fn(f"{API}{path}", timeout=5, **kwargs).json()
+        return fn(f"{API}{path}", timeout=timeout, **kwargs).json()
     except Exception:
         return None
+
+
+def _api_health():
+    """Health check tolerant of free-tier cold starts: on idle hosts the API can
+    take ~30-60s to wake. Fast first probe (warm case), then a longer one that
+    waits out a cold start so the sidebar shows 'Online' instead of flashing red."""
+    for t in (8, 30):
+        h = _api("/health", timeout=t)
+        if h:
+            return h
+    return None
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -315,7 +326,7 @@ with st.sidebar:
 
     st.markdown("<hr style='margin:1rem 0;'>", unsafe_allow_html=True)
 
-    health = _api("/health")
+    health = _api_health()
     if health:
         active   = health.get("tasks_active", 0)
         sb_ok    = health.get("supabase", False)
@@ -341,8 +352,11 @@ with st.sidebar:
     else:
         st.markdown("""
         <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;padding:0 0.4rem;">
-            <span style="width:8px;height:8px;border-radius:50%;background:#f85149;display:inline-block;"></span>
-            <span style="color:#f85149;font-weight:600;">API Offline</span>
+            <span style="width:8px;height:8px;border-radius:50%;background:#d29922;display:inline-block;"></span>
+            <span style="color:#d29922;font-weight:600;">API waking up…</span>
+        </div>
+        <div style="font-size:0.68rem;color:#484f58;padding:0.3rem 0.4rem 0;">
+            Free tier cold start (~30–60s). Refresh in a moment.
         </div>
         """, unsafe_allow_html=True)
 

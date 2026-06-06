@@ -81,8 +81,8 @@ services:
     healthCheckPath: /_stcore/health
     autoDeploy: true
     envVars:
-      - key: API_URL            # resolves to the API's hostname; UI prepends https://
-        fromService:
-          name: aos-api
-          type: web
-          property: host
+      # NOTE: Render's `fromService` `host` property does NOT yield the public
+      # *.onrender.com URL for a web service, so the UI couldn't reach the API.
+      # Point it at the API's public URL explicitly instead.
+      - key: API_URL
+        value: https://aos-api-hlw7.onrender.com
