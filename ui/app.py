@@ -440,14 +440,19 @@ with st.sidebar:
         cel_ok = health.get("celery", False)
 
         def _dot(ok: bool, label: str, detail: str = "") -> str:
-            c = "#10b981" if ok else "#1e2d45"
-            tc = "#10b981" if ok else "#2d3a54"
+            c    = "#10b981" if ok else "#1e2d45"
+            tc   = "#10b981" if ok else "#2d3a54"
             glow = "box-shadow:0 0 8px #10b981;" if ok else ""
+            fw   = "600" if ok else "400"
+            detail_html = (
+                f'<span style="font-size:0.68rem;color:#1e2d45;margin-left:auto;">{detail}</span>'
+                if detail else ""
+            )
             return (
                 f'<div style="display:flex;align-items:center;gap:0.55rem;padding:0.38rem 0.9rem;">'
                 f'<span style="width:6px;height:6px;border-radius:50%;background:{c};flex-shrink:0;{glow}"></span>'
-                f'<span style="font-size:0.78rem;color:{tc};font-weight:{"600" if ok else "400"};">{label}</span>'
-                f'{f\'<span style="font-size:0.68rem;color:#1e2d45;margin-left:auto;">{detail}</span>\' if detail else ""}'
+                f'<span style="font-size:0.78rem;color:{tc};font-weight:{fw};">{label}</span>'
+                f'{detail_html}'
                 f'</div>'
             )
 
