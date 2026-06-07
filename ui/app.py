@@ -30,44 +30,52 @@ st.markdown("""
 /* ── Reset & base ── */
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .main .block-container { padding: 2rem 2.5rem 4rem; max-width: 1400px; }
+.main { background: #080b12 !important; }
 h1,h2,h3,h4,h5,h6 { font-family: 'Inter', sans-serif !important; }
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #080c14; }
-::-webkit-scrollbar-thumb { background: #1e2b3c; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #2d3f58; }
+::-webkit-scrollbar-track { background: #080b12; }
+::-webkit-scrollbar-thumb { background: #1a2236; border-radius: 4px; }
 
 /* ── Sidebar ── */
 [data-testid="stSidebar"] {
-    background: #080c14 !important;
-    border-right: 1px solid #1e2b3c !important;
+    background: #06080f !important;
+    border-right: 1px solid #131929 !important;
 }
-[data-testid="stSidebar"] > div { padding-top: 0 !important; }
+[data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
 
-/* Hide radio dots */
-[data-testid="stSidebar"] .stRadio > label { display: none !important; }
-[data-testid="stSidebar"] .stRadio > div { display: flex; flex-direction: column; gap: 2px; }
-[data-testid="stSidebar"] .stRadio label { margin: 0 !important; padding: 0 !important; }
-[data-testid="stSidebar"] .stRadio label > div:first-child { display: none !important; }
-[data-testid="stSidebar"] .stRadio label > div:last-child {
-    padding: 0.6rem 1rem !important;
-    border-radius: 8px !important;
-    font-size: 0.875rem !important;
-    font-weight: 500 !important;
-    color: #64748b !important;
-    cursor: pointer !important;
-    transition: all 0.15s ease !important;
+/* ── Sidebar nav buttons ── */
+[data-testid="stSidebar"] [data-testid="stButton"] {
     width: 100% !important;
 }
-[data-testid="stSidebar"] .stRadio label > div:last-child:hover {
-    color: #e2e8f0 !important;
-    background: #0f1623 !important;
+[data-testid="stSidebar"] [data-testid="stButton"] button {
+    width: 100% !important;
+    text-align: left !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 8px !important;
+    color: #4a5568 !important;
+    font-size: 0.855rem !important;
+    font-weight: 500 !important;
+    padding: 0.55rem 0.9rem !important;
+    transition: all 0.15s ease !important;
+    box-shadow: none !important;
+    letter-spacing: 0 !important;
+    justify-content: flex-start !important;
 }
-[data-testid="stSidebar"] .stRadio [aria-checked="true"] > div:last-child {
-    color: #60a5fa !important;
-    background: #0f1f3d !important;
+[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
+    background: #0d1120 !important;
+    color: #cbd5e0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
+    background: linear-gradient(90deg, rgba(99,102,241,0.15), rgba(99,102,241,0.05)) !important;
+    color: #818cf8 !important;
     font-weight: 600 !important;
+    border-left: 2px solid #6366f1 !important;
+    border-radius: 0 8px 8px 0 !important;
 }
 
 /* ── Inputs ── */
@@ -92,7 +100,7 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Inter', sans-serif !important; }
 
 /* ── Buttons ── */
 [data-testid="baseButton-primary"] {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
     border: none !important;
     border-radius: 10px !important;
     font-weight: 600 !important;
@@ -288,7 +296,7 @@ hr { border-color: #1e2b3c !important; margin: 1.2rem 0 !important; }
 .progress-wrap { margin-bottom: 1rem; }
 .progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 0.4rem; }
 .progress-track { background: #1e2b3c; border-radius: 10px; height: 6px; overflow: hidden; }
-.progress-fill  { background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 100%; border-radius: 10px; transition: width 0.6s ease; }
+.progress-fill  { background: linear-gradient(90deg, #6366f1, #8b5cf6); height: 100%; border-radius: 10px; transition: width 0.6s ease; }
 
 /* ── Section heading ── */
 .section-heading {
@@ -372,83 +380,97 @@ def _api_health():
 
 
 # ════════════════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR — button-based nav (no radio dots)
 # ════════════════════════════════════════════════════════════════════════
+
+# Page state
+if "page" not in st.session_state:
+    st.session_state["page"] = "Submit Task"
+
+NAV_ITEMS = [
+    ("Submit Task",    "⚡", "Submit Task"),
+    ("Task Monitor",   "📋", "Task Monitor"),
+    ("HITL Queue",     "🔔", "HITL Queue"),
+    ("Trace Explorer", "🔭", "Trace Explorer"),
+    ("Memory & Tools", "🧠", "Memory & Tools"),
+    ("Analytics",      "📈", "Analytics"),
+]
+
 with st.sidebar:
-    # Logo / brand
+    # Brand header
     st.markdown("""
-    <div style="padding: 1.8rem 1.2rem 1.2rem; border-bottom: 1px solid #1e2b3c;">
-        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+    <div style="
+        padding: 1.5rem 1.1rem 1.2rem;
+        border-bottom: 1px solid #131929;
+        background: linear-gradient(180deg, #0a0d17 0%, #06080f 100%);
+    ">
+        <div style="display:flex; align-items:center; gap:0.8rem;">
             <div style="
-                width:36px; height:36px; border-radius:10px;
-                background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+                width:38px; height:38px; border-radius:11px; flex-shrink:0;
+                background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
                 display:flex; align-items:center; justify-content:center;
-                font-size:1.1rem; box-shadow: 0 4px 12px rgba(59,130,246,0.4);
-                flex-shrink:0;
+                font-size:1.15rem;
+                box-shadow: 0 0 20px rgba(99,102,241,0.5), 0 4px 10px rgba(0,0,0,0.4);
             ">⚡</div>
             <div>
-                <div style="font-size:0.88rem; font-weight:700; color:#f0f6ff; line-height:1.2;">Agent OS</div>
-                <div style="font-size:0.65rem; color:#334155; letter-spacing:0.04em;">ORCHESTRATION SYSTEM</div>
+                <div style="font-size:0.9rem; font-weight:800; color:#eef2ff; letter-spacing:-0.01em;">Agent OS</div>
+                <div style="font-size:0.6rem; color:#2d3a54; letter-spacing:0.1em; text-transform:uppercase; margin-top:1px;">Orchestration Platform</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div style="padding: 0.8rem 0.6rem 0.4rem;"><div class="section-heading">Navigation</div></div>', unsafe_allow_html=True)
+    st.markdown('<div style="padding:1rem 0.6rem 0.3rem;font-size:0.62rem;font-weight:700;color:#1e2d45;letter-spacing:0.12em;text-transform:uppercase;">Navigation</div>', unsafe_allow_html=True)
 
-    page = st.radio(
-        "nav",
-        ["⚡  Submit Task", "📋  Task Monitor", "🔔  HITL Queue",
-         "🔭  Trace Explorer", "🧠  Memory & Tools", "📈  Analytics"],
-        label_visibility="collapsed",
-    )
-    page = page.split("  ", 1)[1]
+    for key, icon, label in NAV_ITEMS:
+        is_active = st.session_state["page"] == key
+        btn_type  = "primary" if is_active else "secondary"
+        if st.button(f"{icon}  {label}", key=f"nav_{key}", type=btn_type, use_container_width=True):
+            st.session_state["page"] = key
+            st.rerun()
 
-    st.markdown('<div style="padding: 0.4rem 0.6rem 0;"><div class="section-heading">System Status</div></div>', unsafe_allow_html=True)
+    page = st.session_state["page"]
+
+    st.markdown('<div style="padding:1.2rem 0.6rem 0.3rem;font-size:0.62rem;font-weight:700;color:#1e2d45;letter-spacing:0.12em;text-transform:uppercase;">System</div>', unsafe_allow_html=True)
 
     health = _api_health()
     if health:
-        active  = health.get("tasks_active", 0)
-        sb_ok   = health.get("supabase", False)
-        cel_ok  = health.get("celery", False)
+        active = health.get("tasks_active", 0)
+        sb_ok  = health.get("supabase", False)
+        cel_ok = health.get("celery", False)
 
-        def _status_row(ok, label, sub=""):
-            dot_color = "#10b981" if ok else "#334155"
-            text_color = "#10b981" if ok else "#64748b"
-            label_text = label + (" ✓" if ok else "")
-            return f"""
-            <div style="display:flex;align-items:center;gap:0.6rem;padding:0.45rem 0.6rem;border-radius:8px;background:{'rgba(16,185,129,0.06)' if ok else 'transparent'};">
-                <span style="width:7px;height:7px;border-radius:50%;background:{dot_color};flex-shrink:0;{'box-shadow:0 0 6px #10b981;' if ok else ''}"></span>
-                <span style="font-size:0.8rem;color:{text_color};font-weight:{'600' if ok else '400'};">{label_text}</span>
-                {f'<span style="font-size:0.72rem;color:#334155;margin-left:auto;">{sub}</span>' if sub else ''}
-            </div>"""
+        def _dot(ok: bool, label: str, detail: str = "") -> str:
+            c = "#10b981" if ok else "#1e2d45"
+            tc = "#10b981" if ok else "#2d3a54"
+            glow = "box-shadow:0 0 8px #10b981;" if ok else ""
+            return (
+                f'<div style="display:flex;align-items:center;gap:0.55rem;padding:0.38rem 0.9rem;">'
+                f'<span style="width:6px;height:6px;border-radius:50%;background:{c};flex-shrink:0;{glow}"></span>'
+                f'<span style="font-size:0.78rem;color:{tc};font-weight:{"600" if ok else "400"};">{label}</span>'
+                f'{f\'<span style="font-size:0.68rem;color:#1e2d45;margin-left:auto;">{detail}</span>\' if detail else ""}'
+                f'</div>'
+            )
 
-        st.markdown(f"""
-        <div style="padding:0.2rem 0.4rem; display:flex; flex-direction:column; gap:2px;">
-            {_status_row(True, "API Online", f"{active} active")}
-            {_status_row(sb_ok, "Supabase")}
-            {_status_row(cel_ok, "Celery")}
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            _dot(True, "API Online", f"{active} active") +
+            _dot(sb_ok, "Supabase" + (" ✓" if sb_ok else "")) +
+            _dot(cel_ok, "Celery" + (" ✓" if cel_ok else " Offline")),
+            unsafe_allow_html=True,
+        )
     else:
         st.markdown("""
-        <div style="padding:0.4rem 0.6rem;">
-            <div style="display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.6rem;border-radius:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);">
-                <span style="width:7px;height:7px;border-radius:50%;background:#f59e0b;animation:glow-pulse 2s infinite;flex-shrink:0;"></span>
-                <span style="font-size:0.8rem;color:#f59e0b;font-weight:600;">Waking up…</span>
-            </div>
-            <div style="font-size:0.7rem;color:#334155;padding:0.4rem 0.6rem;line-height:1.5;">
-                Free tier cold start — takes 30–60s on first visit.
-            </div>
+        <div style="margin:0.3rem 0.5rem;padding:0.6rem 0.8rem;border-radius:8px;
+                    background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);">
+            <div style="font-size:0.78rem;color:#d97706;font-weight:600;">⏳ Waking up…</div>
+            <div style="font-size:0.68rem;color:#2d3a54;margin-top:0.2rem;">Cold start ~30–60s</div>
         </div>
         """, unsafe_allow_html=True)
 
-    # Footer
     st.markdown("""
-    <div style="position:absolute;bottom:1.2rem;left:0;right:0;padding:0 1.2rem;border-top:1px solid #1e2b3c;padding-top:0.8rem;">
-        <div style="font-size:0.65rem;color:#334155;line-height:1.6;">
-            LangGraph · OpenAI GPT-4o<br>
-            Redis · Supabase pgvector
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:0.9rem 1.1rem;
+                border-top:1px solid #0d1120;">
+        <div style="font-size:0.62rem;color:#1e2d45;line-height:1.8;letter-spacing:0.02em;">
+            LangGraph · GPT-4o · Redis<br>Supabase pgvector · Render
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -542,7 +564,7 @@ if page == "Submit Task":
 
             # Metrics
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.markdown(metric_card("Subtasks",    f"{completed}/{total}", accent="#3b82f6"), unsafe_allow_html=True)
+            c1.markdown(metric_card("Subtasks",    f"{completed}/{total}", accent="#6366f1"), unsafe_allow_html=True)
             c2.markdown(metric_card("Tokens",      f"{tokens:,}",          accent="#8b5cf6"), unsafe_allow_html=True)
             c3.markdown(metric_card("Tool Calls",  str(tool_calls),        accent="#10b981"), unsafe_allow_html=True)
             c4.markdown(metric_card("Score",       f"{score:.2f}" if score else "—", accent="#f59e0b"), unsafe_allow_html=True)
@@ -659,7 +681,7 @@ elif page == "Task Monitor":
         running_count   = sum(1 for t in tasks if t.get("status") not in ("done","failed","escalated"))
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(metric_card("Total Tasks", str(len(tasks)),          accent="#3b82f6"), unsafe_allow_html=True)
+        c1.markdown(metric_card("Total Tasks", str(len(tasks)),          accent="#6366f1"), unsafe_allow_html=True)
         c2.markdown(metric_card("Completed",   str(done_count),          accent="#10b981"), unsafe_allow_html=True)
         c3.markdown(metric_card("Escalated",   str(escalated_count),     accent="#f59e0b"), unsafe_allow_html=True)
         c4.markdown(metric_card("Failed",      str(failed_count),        accent="#ef4444"), unsafe_allow_html=True)
@@ -858,7 +880,7 @@ elif page == "Trace Explorer":
 
         if full:
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.markdown(metric_card("Status",     full.get("status","—").upper(),         accent="#3b82f6"), unsafe_allow_html=True)
+            c1.markdown(metric_card("Status",     full.get("status","—").upper(),         accent="#6366f1"), unsafe_allow_html=True)
             c2.markdown(metric_card("Tokens",     f"{full.get('total_tokens',0):,}",      accent="#8b5cf6"), unsafe_allow_html=True)
             c3.markdown(metric_card("Tool Calls", str(full.get("total_tool_calls",0)),    accent="#10b981"), unsafe_allow_html=True)
             c4.markdown(metric_card("Score",      f"{full.get('reviewer_score',0):.2f}",  accent="#f59e0b"), unsafe_allow_html=True)
@@ -1040,7 +1062,7 @@ elif page == "Memory & Tools":
             avg_latency    = sum(l.get("latency_s", 0) for l in logs) / max(total_calls, 1)
 
             mc1, mc2, mc3 = st.columns(3)
-            mc1.markdown(metric_card("Total Calls",   str(total_calls),                       accent="#3b82f6"), unsafe_allow_html=True)
+            mc1.markdown(metric_card("Total Calls",   str(total_calls),                       accent="#6366f1"), unsafe_allow_html=True)
             mc2.markdown(metric_card("Success Rate",  f"{100*success_count//max(total_calls,1)}%", accent="#10b981"), unsafe_allow_html=True)
             mc3.markdown(metric_card("Avg Latency",   f"{avg_latency:.2f}s",                  accent="#f59e0b"), unsafe_allow_html=True)
 
@@ -1117,7 +1139,7 @@ elif page == "Analytics":
     else:
         # KPIs
         k1, k2, k3, k4, k5 = st.columns(5)
-        k1.markdown(metric_card("Total Tasks",      str(agg["total_tasks"]),                   accent="#3b82f6"), unsafe_allow_html=True)
+        k1.markdown(metric_card("Total Tasks",      str(agg["total_tasks"]),                   accent="#6366f1"), unsafe_allow_html=True)
         k2.markdown(metric_card("Completed",         str(agg["completed_tasks"]),               accent="#10b981"), unsafe_allow_html=True)
         k3.markdown(metric_card("Total Cost",        f"${agg['total_cost_usd']:.4f}",           accent="#8b5cf6"), unsafe_allow_html=True)
         k4.markdown(metric_card("Avg Cost / Task",   f"${agg['avg_cost_usd']:.4f}",             accent="#f59e0b"), unsafe_allow_html=True)
@@ -1206,7 +1228,7 @@ elif page == "Analytics":
         p1, p2, p3, p4 = st.columns(4)
         p1.markdown(metric_card("Avg Tokens / Task",  f"{agg['avg_tokens']:,}",             accent="#8b5cf6"), unsafe_allow_html=True)
         p2.markdown(metric_card("Avg Review Score",   f"{agg['avg_reviewer_score']:.2f}",   accent="#10b981"), unsafe_allow_html=True)
-        p3.markdown(metric_card("Avg Wall Time",      f"{agg['avg_wall_time_s']:.1f}s",     accent="#3b82f6"), unsafe_allow_html=True)
+        p3.markdown(metric_card("Avg Wall Time",      f"{agg['avg_wall_time_s']:.1f}s",     accent="#6366f1"), unsafe_allow_html=True)
         p4.markdown(metric_card("Failed Tasks",       str(agg["failed_tasks"]),             accent="#ef4444"), unsafe_allow_html=True)
 
         if agg["escalated_tasks"] > 0:
