@@ -3,6 +3,9 @@
 -- Run this once in your Supabase SQL Editor
 -- ============================================================
 
+-- pgvector extension (pre-installed on Supabase, just needs enabling)
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Tasks: full agent state persisted per task
 CREATE TABLE IF NOT EXISTS tasks (
     id              TEXT PRIMARY KEY,
@@ -67,6 +70,51 @@ CREATE TABLE IF NOT EXISTS hitl_events (
     resolved_at     TIMESTAMPTZ
 );
 
+-- ============================================================
+-- Long-term semantic memory (pgvector)
+-- ============================================================
+
+-- Stores task summaries as vector embeddings for semantic recall
+CREATE TABLE IF NOT EXISTS memory_embeddings (
+    id          TEXT PRIMARY KEY,
+    content     TEXT NOT NULL,
+    embedding   vector(1536),           -- OpenAI text-embedding-3-small (1536 dims)
+    metadata    JSONB DEFAULT '{}',
+    timestamp   FLOAT DEFAULT 0,        -- unix epoch; used for recency decay scoring
+    importance  FLOAT DEFAULT 0.5,      -- 0–1 score from reviewer × complexity
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Cosine-similarity search function called by LongTermMemory.query()
+CREATE OR REPLACE FUNCTION match_memories(
+    query_embedding vector(1536),
+    match_count     int DEFAULT 10
+)
+RETURNS TABLE (
+    id          TEXT,
+    content     TEXT,
+    metadata    JSONB,
+    timestamp   FLOAT,
+    importance  FLOAT,
+    similarity  FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        me.id,
+        me.content,
+        me.metadata,
+        me.timestamp,
+        me.importance,
+        (1 - (me.embedding <=> query_embedding))::FLOAT AS similarity
+    FROM memory_embeddings me
+    ORDER BY me.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;
+
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_tasks_user_id   ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status    ON tasks(status);
@@ -74,6 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_created   ON tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_task ON tool_calls(task_id);
 CREATE INDEX IF NOT EXISTS idx_hitl_task       ON hitl_events(task_id);
 CREATE INDEX IF NOT EXISTS idx_hitl_status     ON hitl_events(status);
+CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_embeddings(timestamp DESC);
 
 -- ============================================================
 -- Row-Level Security
@@ -84,17 +133,21 @@ CREATE INDEX IF NOT EXISTS idx_hitl_status     ON hitl_events(status);
 -- that key full access. For a real multi-tenant deployment you'd
 -- replace `USING (true)` with `auth.uid() = user_id` style checks.
 -- ============================================================
-ALTER TABLE tasks       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tool_calls  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hitl_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tool_calls       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hitl_events      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memory_embeddings ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS demo_access_tasks       ON tasks;
-DROP POLICY IF EXISTS demo_access_tool_calls  ON tool_calls;
-DROP POLICY IF EXISTS demo_access_hitl_events ON hitl_events;
+DROP POLICY IF EXISTS demo_access_tasks        ON tasks;
+DROP POLICY IF EXISTS demo_access_tool_calls   ON tool_calls;
+DROP POLICY IF EXISTS demo_access_hitl_events  ON hitl_events;
+DROP POLICY IF EXISTS demo_access_memory       ON memory_embeddings;
 
-CREATE POLICY demo_access_tasks       ON tasks
+CREATE POLICY demo_access_tasks        ON tasks
     FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY demo_access_tool_calls  ON tool_calls
+CREATE POLICY demo_access_tool_calls   ON tool_calls
     FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY demo_access_hitl_events ON hitl_events
+CREATE POLICY demo_access_hitl_events  ON hitl_events
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY demo_access_memory       ON memory_embeddings
     FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);

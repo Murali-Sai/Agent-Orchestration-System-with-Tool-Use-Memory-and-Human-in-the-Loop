@@ -28,7 +28,7 @@ settings = get_settings()
 
 
 def _get_ltm() -> LongTermMemory:
-    return LongTermMemory(persist_dir=settings.chroma_persist_dir)
+    return LongTermMemory()
 
 
 # ──────────────────────────── Node functions ────────────────────────────── #

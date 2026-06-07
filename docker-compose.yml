@@ -14,21 +14,6 @@ services:
       timeout: 3s
       retries: 5
 
-  chromadb:
-    image: chromadb/chroma:latest
-    ports:
-      - "8888:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
-    environment:
-      - ALLOW_RESET=true
-      - ANONYMIZED_TELEMETRY=false
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ── Application services ─────────────────────────────────────────────── #
 
   api:
@@ -43,7 +28,6 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - REDIS_URL=redis://redis:6379/0
-      - CHROMA_PERSIST_DIR=/app/chroma_db
       - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.6}
       - QUALITY_THRESHOLD=${QUALITY_THRESHOLD:-0.65}
       - MAX_RETRIES=${MAX_RETRIES:-2}
@@ -52,7 +36,6 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8501}
       - USE_CELERY=true   # real workers run in this compose stack
     volumes:
-      - chroma_data:/app/chroma_db
       - workspace_data:/app/workspace
     depends_on:
       redis:
@@ -69,14 +52,12 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - REDIS_URL=redis://redis:6379/0
-      - CHROMA_PERSIST_DIR=/app/chroma_db
       - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.6}
       - QUALITY_THRESHOLD=${QUALITY_THRESHOLD:-0.65}
       - MAX_RETRIES=${MAX_RETRIES:-2}
       - PRIMARY_MODEL=${PRIMARY_MODEL:-gpt-4o}
       - FAST_MODEL=${FAST_MODEL:-gpt-4o-mini}
     volumes:
-      - chroma_data:/app/chroma_db
       - workspace_data:/app/workspace
     depends_on:
       redis:
@@ -110,5 +91,4 @@ services:
 
 volumes:
   redis_data:
-  chroma_data:
   workspace_data:

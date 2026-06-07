@@ -13,7 +13,6 @@ class Settings(BaseSettings):
 
     # Infrastructure
     redis_url: str = "redis://localhost:6379/0"
-    chroma_persist_dir: str = "./chroma_db"
 
     # Supabase
     supabase_url: str = ""

@@ -10,12 +10,14 @@
 # back to in-process threads for async task dispatch (see api/main._dispatch_task).
 # To run the async stack, switch the worker to a paid Background Worker service.
 #
+# Storage architecture:
+#   • Redis (Key Value)  — ephemeral working memory + HITL approval queue
+#   • Supabase PostgreSQL — durable task/audit persistence (pgvector for memory)
+#   • Long-term memory uses pgvector inside Supabase — survives restarts, no disk needed
+#
 # Notes / free-tier trade-offs (all acceptable for a portfolio demo):
 #   • Free web services spin down after 15 min idle (~1 min cold start).
 #   • Key Value is in-memory only — working memory resets on restart.
-#   • No persistent disk on free tier — ChromaDB long-term memory is ephemeral
-#     and resets on redeploy/restart. For durable memory, attach a disk on a
-#     paid plan or point CHROMA_PERSIST_DIR at an external vector store.
 #   • If the API OOMs on free (512 MB), bump `plan: free` → `standard` on aos-api.
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -53,8 +55,6 @@ services:
           name: aos-redis
           type: keyvalue
           property: connectionString
-      - key: CHROMA_PERSIST_DIR
-        value: /app/chroma_db
       - key: CORS_ORIGINS
         value: "*"
       - key: APP_ENV

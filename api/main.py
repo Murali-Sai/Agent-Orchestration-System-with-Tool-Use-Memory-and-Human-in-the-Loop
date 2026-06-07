@@ -361,7 +361,7 @@ def hitl_resolved():
 @app.get("/memory/stats")
 def memory_stats():
     from memory.longterm import LongTermMemory
-    ltm = LongTermMemory(settings.chroma_persist_dir)
+    ltm = LongTermMemory()
     return {
         "long_term_memories": ltm.count(),
         "supabase_enabled": supabase_enabled(),
@@ -372,7 +372,7 @@ def memory_stats():
 def memory_list(limit: int = 20):
     """Return recent long-term memories with content and metadata."""
     from memory.longterm import LongTermMemory
-    ltm = LongTermMemory(settings.chroma_persist_dir)
+    ltm = LongTermMemory()
     memories = ltm.list_all(limit=limit)
     return {"memories": memories}
 
@@ -381,7 +381,7 @@ def memory_list(limit: int = 20):
 def memory_delete(memory_id: str):
     """Delete a specific memory by ID (GDPR / user data request)."""
     from memory.longterm import LongTermMemory
-    ltm = LongTermMemory(settings.chroma_persist_dir)
+    ltm = LongTermMemory()
     ltm.delete(memory_id)
     return {"deleted": memory_id}
 
@@ -390,7 +390,7 @@ def memory_delete(memory_id: str):
 def memory_consolidate():
     """Merge near-duplicate memories to keep the store clean."""
     from memory.longterm import LongTermMemory
-    ltm = LongTermMemory(settings.chroma_persist_dir)
+    ltm = LongTermMemory()
     removed = ltm.consolidate()
     return {"merged_removed": removed, "remaining": ltm.count()}
 
@@ -399,7 +399,7 @@ def memory_consolidate():
 def memory_prune(max_age_days: float = 90.0):
     """Delete memories older than max_age_days."""
     from memory.longterm import LongTermMemory
-    ltm = LongTermMemory(settings.chroma_persist_dir)
+    ltm = LongTermMemory()
     removed = ltm.prune_old(max_age_days)
     return {"pruned": removed, "remaining": ltm.count()}
 
