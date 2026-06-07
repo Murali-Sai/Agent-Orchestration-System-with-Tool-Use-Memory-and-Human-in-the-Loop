@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS memory_embeddings (
     content     TEXT NOT NULL,
     embedding   vector(1536),           -- OpenAI text-embedding-3-small (1536 dims)
     metadata    JSONB DEFAULT '{}',
-    timestamp   FLOAT DEFAULT 0,        -- unix epoch; used for recency decay scoring
+    ts          FLOAT DEFAULT 0,        -- unix epoch; used for recency decay scoring
     importance  FLOAT DEFAULT 0.5,      -- 0–1 score from reviewer × complexity
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
@@ -94,7 +94,7 @@ RETURNS TABLE (
     id          TEXT,
     content     TEXT,
     metadata    JSONB,
-    timestamp   FLOAT,
+    ts          FLOAT,
     importance  FLOAT,
     similarity  FLOAT
 )
@@ -106,7 +106,7 @@ BEGIN
         me.id,
         me.content,
         me.metadata,
-        me.timestamp,
+        me.ts,
         me.importance,
         (1 - (me.embedding <=> query_embedding))::FLOAT AS similarity
     FROM memory_embeddings me
@@ -122,7 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_created   ON tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_task ON tool_calls(task_id);
 CREATE INDEX IF NOT EXISTS idx_hitl_task       ON hitl_events(task_id);
 CREATE INDEX IF NOT EXISTS idx_hitl_status     ON hitl_events(status);
-CREATE INDEX IF NOT EXISTS idx_memory_timestamp ON memory_embeddings(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_ts ON memory_embeddings(ts DESC);
 
 -- ============================================================
 -- Row-Level Security

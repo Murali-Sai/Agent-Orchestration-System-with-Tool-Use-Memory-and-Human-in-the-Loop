@@ -88,7 +88,7 @@ class LongTermMemory:
                 "content":    content[:2000],
                 "embedding":  embedding,
                 "metadata":   metadata or {},
-                "timestamp":  now,
+                "ts":         now,
                 "importance": importance,
             }).execute()
             log.info("memory_saved", id=mem_id, importance=importance, preview=content[:80])
@@ -127,7 +127,7 @@ class LongTermMemory:
         for row in rows:
             cosine_relevance = float(row.get("similarity", 0))
             importance = float(row.get("importance", 0.5))
-            ts = float(row.get("timestamp", time.time()))
+            ts = float(row.get("ts", time.time()))
             recency = _recency_weight(ts)
             composite = round(
                 cosine_relevance * (0.5 + 0.5 * importance) * (0.7 + 0.3 * recency), 4
@@ -151,8 +151,8 @@ class LongTermMemory:
             return []
         try:
             resp = self._sb.table("memory_embeddings").select(
-                "id, content, metadata, timestamp, importance"
-            ).order("timestamp", desc=True).limit(limit).execute()
+                "id, content, metadata, ts, importance"
+            ).order("ts", desc=True).limit(limit).execute()
             return [
                 {"id": r["id"], "content": r["content"], "metadata": r.get("metadata", {})}
                 for r in (resp.data or [])
@@ -179,7 +179,7 @@ class LongTermMemory:
         cutoff = time.time() - max_age_days * 86400
         try:
             resp = self._sb.table("memory_embeddings").select("id").lt(
-                "timestamp", cutoff
+                "ts", cutoff
             ).execute()
             ids = [r["id"] for r in (resp.data or [])]
             if ids:
