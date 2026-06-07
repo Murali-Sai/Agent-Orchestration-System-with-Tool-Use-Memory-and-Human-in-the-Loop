@@ -472,9 +472,8 @@ with st.sidebar:
         """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="position:absolute;bottom:0;left:0;right:0;padding:0.9rem 1.1rem;
-                border-top:1px solid #0d1120;">
-        <div style="font-size:0.62rem;color:#1e2d45;line-height:1.8;letter-spacing:0.02em;">
+    <div style="margin-top:1.5rem;padding:0.9rem 1.1rem 0.4rem;border-top:1px solid #0d1120;">
+        <div style="font-size:0.62rem;color:#1e2d45;line-height:1.9;letter-spacing:0.02em;">
             LangGraph · GPT-4o · Redis<br>Supabase pgvector · Render
         </div>
     </div>
