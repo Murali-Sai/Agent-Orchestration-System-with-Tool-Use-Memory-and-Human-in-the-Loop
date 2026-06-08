@@ -25,23 +25,36 @@ if st.session_state.get("active_task"):
 # ════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── Reset & base ── */
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+html, body, [class*="css"] { font-family: 'Sora', sans-serif; }
 .main .block-container { padding: 2rem 2.5rem 4rem; max-width: 1400px; }
-.main { background: #080b12 !important; }
-h1,h2,h3,h4,h5,h6 { font-family: 'Inter', sans-serif !important; }
+h1,h2,h3,h4,h5,h6 { font-family: 'Sora', sans-serif !important; letter-spacing: -0.02em; }
+
+/* ── Atmospheric background: deep base + radial glow + dotted grid ── */
+.stApp {
+    background:
+        radial-gradient(900px 500px at 78% -8%, rgba(245,166,35,0.07), transparent 60%),
+        radial-gradient(800px 600px at 12% 8%, rgba(56,189,248,0.05), transparent 55%),
+        #08090c !important;
+}
+.main {
+    background:
+        radial-gradient(rgba(255,255,255,0.022) 1px, transparent 1px) !important;
+    background-size: 22px 22px !important;
+    background-position: -1px -1px !important;
+}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #080b12; }
-::-webkit-scrollbar-thumb { background: #1a2236; border-radius: 4px; }
+::-webkit-scrollbar-track { background: #08090c; }
+::-webkit-scrollbar-thumb { background: #20242e; border-radius: 4px; }
 
 /* ── Sidebar ── */
 [data-testid="stSidebar"] {
-    background: #06080f !important;
-    border-right: 1px solid #131929 !important;
+    background: #060709 !important;
+    border-right: 1px solid #16181f !important;
 }
 [data-testid="stSidebar"] > div:first-child { padding: 0 !important; }
 
@@ -55,7 +68,7 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Inter', sans-serif !important; }
     background: transparent !important;
     border: none !important;
     border-radius: 8px !important;
-    color: #4a5568 !important;
+    color: #5a6172 !important;
     font-size: 0.855rem !important;
     font-weight: 500 !important;
     padding: 0.55rem 0.9rem !important;
@@ -65,34 +78,34 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Inter', sans-serif !important; }
     justify-content: flex-start !important;
 }
 [data-testid="stSidebar"] [data-testid="stButton"] button:hover {
-    background: #0d1120 !important;
-    color: #cbd5e0 !important;
+    background: #101216 !important;
+    color: #d6dae2 !important;
     box-shadow: none !important;
     transform: none !important;
 }
 [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] {
-    background: linear-gradient(90deg, rgba(99,102,241,0.15), rgba(99,102,241,0.05)) !important;
-    color: #818cf8 !important;
+    background: linear-gradient(90deg, rgba(245,166,35,0.14), rgba(245,166,35,0.02)) !important;
+    color: #f5a623 !important;
     font-weight: 600 !important;
-    border-left: 2px solid #6366f1 !important;
+    border-left: 2px solid #f5a623 !important;
     border-radius: 0 8px 8px 0 !important;
 }
 
 /* ── Inputs ── */
 [data-testid="stTextInput"] input,
 [data-testid="stTextArea"] textarea {
-    background: #0a0f1a !important;
-    border: 1px solid #1e2b3c !important;
+    background: #0b0d11 !important;
+    border: 1px solid #1d212b !important;
     border-radius: 10px !important;
-    color: #e2e8f0 !important;
-    font-family: 'Inter', sans-serif !important;
+    color: #e6e9ef !important;
+    font-family: 'Sora', sans-serif !important;
     font-size: 0.9rem !important;
     transition: border-color 0.2s, box-shadow 0.2s !important;
 }
 [data-testid="stTextInput"] input:focus,
 [data-testid="stTextArea"] textarea:focus {
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
+    border-color: #f5a623 !important;
+    box-shadow: 0 0 0 3px rgba(245,166,35,0.13) !important;
     outline: none !important;
 }
 [data-testid="stTextInput"] label,
@@ -100,90 +113,95 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Inter', sans-serif !important; }
 
 /* ── Buttons ── */
 [data-testid="baseButton-primary"] {
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+    background: linear-gradient(135deg, #f5a623 0%, #e08e00 100%) !important;
     border: none !important;
     border-radius: 10px !important;
-    font-weight: 600 !important;
+    color: #1a1206 !important;
+    font-weight: 700 !important;
     font-size: 0.875rem !important;
-    letter-spacing: 0.02em !important;
-    box-shadow: 0 4px 15px rgba(59,130,246,0.3) !important;
+    letter-spacing: 0.01em !important;
+    box-shadow: 0 4px 16px rgba(245,166,35,0.28) !important;
     transition: all 0.2s !important;
 }
 [data-testid="baseButton-primary"]:hover {
     transform: translateY(-1px) !important;
-    box-shadow: 0 6px 20px rgba(59,130,246,0.4) !important;
+    box-shadow: 0 8px 26px rgba(245,166,35,0.42) !important;
 }
 [data-testid="baseButton-secondary"] {
-    background: #0f1623 !important;
-    border: 1px solid #1e2b3c !important;
-    color: #94a3b8 !important;
+    background: #0e0f13 !important;
+    border: 1px solid #1d1f27 !important;
+    color: #9aa1b1 !important;
     border-radius: 10px !important;
     font-weight: 500 !important;
     transition: all 0.2s !important;
 }
 [data-testid="baseButton-secondary"]:hover {
-    border-color: #3b82f6 !important;
-    color: #e2e8f0 !important;
+    border-color: #f5a623 !important;
+    color: #f0e9dc !important;
 }
 
 /* ── Expander ── */
 [data-testid="stExpander"] {
-    background: #0f1623 !important;
-    border: 1px solid #1e2b3c !important;
+    background: #0e0f13 !important;
+    border: 1px solid #1d1f27 !important;
     border-radius: 10px !important;
 }
-[data-testid="stExpander"] summary { color: #94a3b8 !important; font-size: 0.875rem !important; }
+[data-testid="stExpander"] summary { color: #9aa1b1 !important; font-size: 0.875rem !important; }
 
 /* ── Select box ── */
 [data-testid="stSelectbox"] > div > div {
-    background: #0a0f1a !important;
-    border: 1px solid #1e2b3c !important;
+    background: #0b0d11 !important;
+    border: 1px solid #1d1f27 !important;
     border-radius: 10px !important;
-    color: #e2e8f0 !important;
+    color: #e6e9ef !important;
 }
 
 /* ── Slider ── */
-[data-testid="stSlider"] > div > div > div > div { background: #3b82f6 !important; }
+[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] { background: #f5a623 !important; }
+[data-testid="stSlider"] > div > div > div > div { background: #f5a623 !important; }
 
 /* ── Divider ── */
-hr { border-color: #1e2b3c !important; margin: 1.2rem 0 !important; }
+hr { border-color: #1a1c22 !important; margin: 1.2rem 0 !important; }
 
 /* ── Alerts ── */
 [data-testid="stAlert"] { border-radius: 10px !important; }
 
 /* ── Card components ── */
 .card {
-    background: #0f1623;
-    border: 1px solid #1e2b3c;
+    background: #0e0f13;
+    border: 1px solid #1d1f27;
     border-radius: 14px;
     padding: 1.4rem 1.6rem;
     margin-bottom: 0.9rem;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
-.card:hover { border-color: rgba(59,130,246,0.3); }
-.card-blue   { border-left: 3px solid #3b82f6; }
+.card:hover { border-color: rgba(245,166,35,0.28); }
+.card-blue   { border-left: 3px solid #38bdf8; }
 .card-green  { border-left: 3px solid #10b981; }
-.card-yellow { border-left: 3px solid #f59e0b; }
+.card-yellow { border-left: 3px solid #f5a623; }
 .card-red    { border-left: 3px solid #ef4444; }
-.card-purple { border-left: 3px solid #8b5cf6; }
+.card-purple { border-left: 3px solid #a78bfa; }
 
 /* ── Hero header ── */
 .page-hero {
-    background: linear-gradient(135deg, #0f1623 0%, #0a1628 50%, #080c14 100%);
-    border: 1px solid #1e2b3c;
+    background:
+        radial-gradient(600px 200px at 88% -40%, rgba(245,166,35,0.10), transparent 70%),
+        linear-gradient(135deg, #101115 0%, #0c0d11 60%, #0a0b0e 100%);
+    border: 1px solid #1c1e26;
     border-radius: 16px;
     padding: 2rem 2.2rem;
     margin-bottom: 2rem;
     position: relative;
     overflow: hidden;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset;
 }
 .page-hero::before {
     content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent);
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(245,166,35,0.6), transparent);
 }
-.page-hero h1 { font-size: 1.6rem; font-weight: 800; color: #f0f6ff; margin: 0 0 0.4rem; letter-spacing: -0.02em; }
-.page-hero p  { color: #64748b; margin: 0; font-size: 0.9rem; line-height: 1.5; }
+.page-hero h1 { font-size: 1.65rem; font-weight: 800; color: #f4f5f8; margin: 0 0 0.4rem; letter-spacing: -0.03em; }
+.page-hero p  { color: #6b7280; margin: 0; font-size: 0.9rem; line-height: 1.5; }
 
 /* ── Status badges ── */
 .badge {
@@ -204,17 +222,17 @@ hr { border-color: #1e2b3c !important; margin: 1.2rem 0 !important; }
 
 /* ── Metric cards ── */
 .metric-card {
-    background: #0f1623;
-    border: 1px solid #1e2b3c;
+    background: #0e0f13;
+    border: 1px solid #1d1f27;
     border-radius: 12px;
     padding: 1.1rem 1.2rem;
     text-align: center;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, transform 0.2s;
 }
-.metric-card:hover { border-color: rgba(59,130,246,0.25); }
-.metric-card .m-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; font-weight: 600; }
-.metric-card .m-value { font-size: 1.75rem; font-weight: 800; color: #f0f6ff; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em; }
-.metric-card .m-sub   { font-size: 0.72rem; color: #334155; margin-top: 0.25rem; }
+.metric-card:hover { border-color: rgba(245,166,35,0.25); transform: translateY(-2px); }
+.metric-card .m-label { font-size: 0.68rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; font-weight: 600; }
+.metric-card .m-value { font-size: 1.75rem; font-weight: 700; color: #f4f5f8; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.03em; }
+.metric-card .m-sub   { font-size: 0.72rem; color: #3a4150; margin-top: 0.25rem; }
 
 /* ── Agent pipeline ── */
 .pipeline { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.8rem 0; align-items: center; }
@@ -228,15 +246,15 @@ hr { border-color: #1e2b3c !important; margin: 1.2rem 0 !important; }
     transition: all 0.2s;
 }
 .agent-chip.done        { background: rgba(16,185,129,0.1);  color: #10b981; border-color: rgba(16,185,129,0.2); }
-.agent-chip.in_progress { background: rgba(59,130,246,0.15); color: #60a5fa; border-color: #3b82f6; animation: glow-pulse 2s infinite; }
-.agent-chip.pending     { background: rgba(30,43,60,0.5);    color: #334155; border-color: #1e2b3c; }
+.agent-chip.in_progress { background: rgba(245,166,35,0.14); color: #f5a623; border-color: #f5a623; animation: glow-pulse 2s infinite; }
+.agent-chip.pending     { background: rgba(20,22,28,0.6);    color: #3a4150; border-color: #1c1e26; }
 .agent-chip.failed      { background: rgba(239,68,68,0.1);   color: #f87171; border-color: rgba(239,68,68,0.2); }
 .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.pipe-arrow { color: #1e2b3c; font-size: 1rem; }
+.pipe-arrow { color: #2a2d36; font-size: 1rem; }
 
 @keyframes glow-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
-    50%       { box-shadow: 0 0 0 6px rgba(59,130,246,0.05); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,166,35,0.4); }
+    50%       { box-shadow: 0 0 0 6px rgba(245,166,35,0.04); }
 }
 
 /* ── Timeline trace ── */
@@ -244,24 +262,24 @@ hr { border-color: #1e2b3c !important; margin: 1.2rem 0 !important; }
 .timeline::before {
     content: '';
     position: absolute; left: 0.45rem; top: 0.5rem; bottom: 0;
-    width: 1px; background: linear-gradient(to bottom, #1e2b3c, transparent);
+    width: 1px; background: linear-gradient(to bottom, #24262f, transparent);
 }
 .timeline-event { position: relative; margin-bottom: 1rem; }
 .timeline-dot {
     position: absolute; left: -1.25rem; top: 0.4rem;
     width: 9px; height: 9px; border-radius: 50%;
-    border: 2px solid currentColor; background: #080c14;
+    border: 2px solid currentColor; background: #08090c;
 }
 .timeline-content {
-    background: #0f1623; border: 1px solid #1e2b3c;
+    background: #0e0f13; border: 1px solid #1d1f27;
     border-radius: 10px; padding: 0.75rem 1rem;
     transition: border-color 0.2s;
 }
-.timeline-content:hover { border-color: #2d3f58; }
+.timeline-content:hover { border-color: #2c2f3a; }
 .timeline-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
 .timeline-agent { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.timeline-time  { font-size: 0.7rem; color: #334155; font-family: 'JetBrains Mono', monospace; }
-.timeline-action { font-size: 0.83rem; color: #64748b; }
+.timeline-time  { font-size: 0.7rem; color: #3a4150; font-family: 'JetBrains Mono', monospace; }
+.timeline-action { font-size: 0.83rem; color: #6b7280; }
 
 /* Agent accent colours */
 .ac-supervisor { color: #60a5fa; }
@@ -270,13 +288,13 @@ hr { border-color: #1e2b3c !important; margin: 1.2rem 0 !important; }
 .ac-writing    { color: #a78bfa; }
 .ac-code       { color: #fb923c; }
 .ac-reviewer   { color: #38bdf8; }
-.ac-system     { color: #334155; }
+.ac-system     { color: #3a4150; }
 
 /* ── HITL card ── */
 .hitl-card {
-    background: #120f06;
-    border: 1px solid rgba(245,158,11,0.2);
-    border-left: 3px solid #f59e0b;
+    background: #14100a;
+    border: 1px solid rgba(245,166,35,0.2);
+    border-left: 3px solid #f5a623;
     border-radius: 14px;
     padding: 1.4rem 1.6rem;
     margin-bottom: 1.2rem;
@@ -294,15 +312,27 @@ hr { border-color: #1e2b3c !important; margin: 1.2rem 0 !important; }
 
 /* ── Progress bar ── */
 .progress-wrap { margin-bottom: 1rem; }
-.progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 0.4rem; }
-.progress-track { background: #1e2b3c; border-radius: 10px; height: 6px; overflow: hidden; }
-.progress-fill  { background: linear-gradient(90deg, #6366f1, #8b5cf6); height: 100%; border-radius: 10px; transition: width 0.6s ease; }
+.progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: #6b7280; margin-bottom: 0.4rem; }
+.progress-track { background: #1a1c22; border-radius: 10px; height: 6px; overflow: hidden; }
+.progress-fill  { background: linear-gradient(90deg, #f5a623, #ffce5c); height: 100%; border-radius: 10px; transition: width 0.6s ease; box-shadow: 0 0 12px rgba(245,166,35,0.5); }
 
 /* ── Section heading ── */
 .section-heading {
-    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; color: #334155; margin: 1.5rem 0 0.8rem;
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.12em; color: #4a5160; margin: 1.5rem 0 0.8rem;
 }
+
+/* ── Staggered entrance animation ── */
+@keyframes rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.page-hero { animation: rise-in 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+[data-testid="stHorizontalBlock"] { animation: rise-in 0.55s cubic-bezier(0.22,1,0.36,1) 0.08s both; }
+.card, .timeline-event, .hitl-card { animation: rise-in 0.5s cubic-bezier(0.22,1,0.36,1) 0.12s both; }
+
+/* Sidebar brand subtle pulse on logo */
+[data-testid="stSidebar"] { animation: rise-in 0.4s ease both; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -401,20 +431,20 @@ with st.sidebar:
     st.markdown("""
     <div style="
         padding: 1.5rem 1.1rem 1.2rem;
-        border-bottom: 1px solid #131929;
-        background: linear-gradient(180deg, #0a0d17 0%, #06080f 100%);
+        border-bottom: 1px solid #16181f;
+        background: linear-gradient(180deg, #0c0d11 0%, #060709 100%);
     ">
         <div style="display:flex; align-items:center; gap:0.8rem;">
             <div style="
                 width:38px; height:38px; border-radius:11px; flex-shrink:0;
-                background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+                background: linear-gradient(135deg, #f5a623 0%, #d98600 100%);
                 display:flex; align-items:center; justify-content:center;
                 font-size:1.15rem;
-                box-shadow: 0 0 20px rgba(99,102,241,0.5), 0 4px 10px rgba(0,0,0,0.4);
+                box-shadow: 0 0 22px rgba(245,166,35,0.45), 0 4px 10px rgba(0,0,0,0.5);
             ">⚡</div>
             <div>
-                <div style="font-size:0.9rem; font-weight:800; color:#eef2ff; letter-spacing:-0.01em;">Agent OS</div>
-                <div style="font-size:0.6rem; color:#2d3a54; letter-spacing:0.1em; text-transform:uppercase; margin-top:1px;">Orchestration Platform</div>
+                <div style="font-size:0.92rem; font-weight:800; color:#f4f1ea; letter-spacing:-0.01em;">Agent OS</div>
+                <div style="font-size:0.6rem; color:#4a4233; letter-spacing:0.14em; text-transform:uppercase; margin-top:2px;">Mission Control</div>
             </div>
         </div>
     </div>
@@ -555,7 +585,7 @@ if page == "Submit Task":
                 st.markdown(
                     f'<div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1.2rem;">'
                     f'<span style="font-size:0.82rem;color:#64748b;font-family:monospace;">TASK</span>'
-                    f'<code style="background:#0f1623;border:1px solid #1e2b3c;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.82rem;color:#94a3b8;">{task_id}</code>'
+                    f'<code style="background:#0e0f13;border:1px solid #1d1f27;padding:0.2rem 0.6rem;border-radius:6px;font-size:0.82rem;color:#94a3b8;">{task_id}</code>'
                     f'{badge(status)}'
                     f'</div>',
                     unsafe_allow_html=True,
@@ -568,7 +598,7 @@ if page == "Submit Task":
 
             # Metrics
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.markdown(metric_card("Subtasks",    f"{completed}/{total}", accent="#6366f1"), unsafe_allow_html=True)
+            c1.markdown(metric_card("Subtasks",    f"{completed}/{total}", accent="#f5a623"), unsafe_allow_html=True)
             c2.markdown(metric_card("Tokens",      f"{tokens:,}",          accent="#8b5cf6"), unsafe_allow_html=True)
             c3.markdown(metric_card("Tool Calls",  str(tool_calls),        accent="#10b981"), unsafe_allow_html=True)
             c4.markdown(metric_card("Score",       f"{score:.2f}" if score else "—", accent="#f59e0b"), unsafe_allow_html=True)
@@ -582,7 +612,7 @@ if page == "Submit Task":
                 st.markdown(f"""
                 <div class="progress-wrap">
                     <div class="progress-label">
-                        <span>Execution Progress</span><span style="color:#3b82f6;font-weight:600;">{pct}%</span>
+                        <span>Execution Progress</span><span style="color:#f5a623;font-weight:600;">{pct}%</span>
                     </div>
                     <div class="progress-track">
                         <div class="progress-fill" style="width:{pct}%;"></div>
@@ -611,7 +641,7 @@ if page == "Submit Task":
                         "failed": "rgba(239,68,68,0.05)"
                     }.get(st_status, "transparent")
                     st.markdown(f"""
-                    <div style="display:flex;align-items:flex-start;gap:0.8rem;padding:0.8rem 1rem;background:{bg};border:1px solid #1e2b3c;border-left:2px solid {color};border-radius:10px;margin-bottom:0.4rem;transition:all 0.2s;">
+                    <div style="display:flex;align-items:flex-start;gap:0.8rem;padding:0.8rem 1rem;background:{bg};border:1px solid #1d1f27;border-left:2px solid {color};border-radius:10px;margin-bottom:0.4rem;transition:all 0.2s;">
                         <span style="color:{color};font-size:0.9rem;margin-top:1px;font-weight:700;min-width:14px;">{icon}</span>
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:0.7rem;color:{color};font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem;">{AGENT_ICONS.get(specialist,'🤖')} {specialist}</div>
@@ -675,7 +705,7 @@ elif page == "Task Monitor":
         <div style="text-align:center;padding:5rem 2rem;">
             <div style="font-size:3rem;margin-bottom:1rem;opacity:0.4;">📭</div>
             <div style="font-size:1rem;font-weight:600;color:#334155;">No tasks yet</div>
-            <div style="font-size:0.85rem;color:#1e2b3c;margin-top:0.5rem;">Submit a task to get started.</div>
+            <div style="font-size:0.85rem;color:#1d1f27;margin-top:0.5rem;">Submit a task to get started.</div>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -685,7 +715,7 @@ elif page == "Task Monitor":
         running_count   = sum(1 for t in tasks if t.get("status") not in ("done","failed","escalated"))
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(metric_card("Total Tasks", str(len(tasks)),          accent="#6366f1"), unsafe_allow_html=True)
+        c1.markdown(metric_card("Total Tasks", str(len(tasks)),          accent="#f5a623"), unsafe_allow_html=True)
         c2.markdown(metric_card("Completed",   str(done_count),          accent="#10b981"), unsafe_allow_html=True)
         c3.markdown(metric_card("Escalated",   str(escalated_count),     accent="#f59e0b"), unsafe_allow_html=True)
         c4.markdown(metric_card("Failed",      str(failed_count),        accent="#ef4444"), unsafe_allow_html=True)
@@ -701,7 +731,7 @@ elif page == "Task Monitor":
             status_color = {
                 "done": "#10b981", "failed": "#ef4444",
                 "escalated": "#f59e0b"
-            }.get(status, "#3b82f6")
+            }.get(status, "#f5a623")
 
             with st.expander(f"{req_text}  —  {tid}"):
                 full = _api(f"/tasks/{tid}")
@@ -780,7 +810,7 @@ elif page == "HITL Queue":
                         </div>
                     </div>
                 </div>
-                <div style="font-size:0.85rem;color:#64748b;padding:0.65rem 0.9rem;background:#080c14;border-radius:8px;border-left:2px solid #1e2b3c;line-height:1.5;">
+                <div style="font-size:0.85rem;color:#64748b;padding:0.65rem 0.9rem;background:#0a0b0e;border-radius:8px;border-left:2px solid #1d1f27;line-height:1.5;">
                     {task_req}
                 </div>
             </div>
@@ -799,7 +829,7 @@ elif page == "HITL Queue":
                     role_label = "🧑 You" if m["role"] == "human" else "🤖 Agent"
                     role_color = "#60a5fa" if m["role"] == "human" else "#10b981"
                     st.markdown(
-                        f'<div style="margin-bottom:0.5rem;padding:0.5rem 0.75rem;background:#080c14;'
+                        f'<div style="margin-bottom:0.5rem;padding:0.5rem 0.75rem;background:#0a0b0e;'
                         f'border-left:2px solid {role_color};border-radius:0 8px 8px 0;font-size:0.84rem;">'
                         f'<span style="color:{role_color};font-weight:600;font-size:0.72rem;">{role_label}</span><br>'
                         f'<span style="color:#94a3b8;">{m["message"]}</span></div>',
@@ -845,7 +875,7 @@ elif page == "HITL Queue":
             color       = "#10b981" if is_approved else "#ef4444"
             ts          = str(item.get("resolved_at") or item.get("created_at",""))[:16]
             st.markdown(f"""
-            <div style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.9rem;background:#0f1623;border:1px solid #1e2b3c;border-radius:9px;margin-bottom:0.35rem;font-size:0.83rem;">
+            <div style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.9rem;background:#0e0f13;border:1px solid #1d1f27;border-radius:9px;margin-bottom:0.35rem;font-size:0.83rem;">
                 <span>{icon}</span>
                 <code style="color:#64748b;font-size:0.75rem;">{item.get('task_id','')}</code>
                 <span style="color:#94a3b8;">{trigger}</span>
@@ -884,7 +914,7 @@ elif page == "Trace Explorer":
 
         if full:
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.markdown(metric_card("Status",     full.get("status","—").upper(),         accent="#6366f1"), unsafe_allow_html=True)
+            c1.markdown(metric_card("Status",     full.get("status","—").upper(),         accent="#f5a623"), unsafe_allow_html=True)
             c2.markdown(metric_card("Tokens",     f"{full.get('total_tokens',0):,}",      accent="#8b5cf6"), unsafe_allow_html=True)
             c3.markdown(metric_card("Tool Calls", str(full.get("total_tool_calls",0)),    accent="#10b981"), unsafe_allow_html=True)
             c4.markdown(metric_card("Score",      f"{full.get('reviewer_score',0):.2f}",  accent="#f59e0b"), unsafe_allow_html=True)
@@ -1066,7 +1096,7 @@ elif page == "Memory & Tools":
             avg_latency    = sum(l.get("latency_s", 0) for l in logs) / max(total_calls, 1)
 
             mc1, mc2, mc3 = st.columns(3)
-            mc1.markdown(metric_card("Total Calls",   str(total_calls),                       accent="#6366f1"), unsafe_allow_html=True)
+            mc1.markdown(metric_card("Total Calls",   str(total_calls),                       accent="#f5a623"), unsafe_allow_html=True)
             mc2.markdown(metric_card("Success Rate",  f"{100*success_count//max(total_calls,1)}%", accent="#10b981"), unsafe_allow_html=True)
             mc3.markdown(metric_card("Avg Latency",   f"{avg_latency:.2f}s",                  accent="#f59e0b"), unsafe_allow_html=True)
 
@@ -1079,10 +1109,10 @@ elif page == "Memory & Tools":
                 agent   = log_entry.get("agent","")
                 latency = log_entry.get("latency_s", 0)
                 st.markdown(f"""
-                <div style="display:flex;align-items:center;gap:0.7rem;padding:0.55rem 0.9rem;background:#0f1623;border:1px solid #1e2b3c;border-radius:8px;margin-bottom:0.3rem;font-size:0.81rem;">
+                <div style="display:flex;align-items:center;gap:0.7rem;padding:0.55rem 0.9rem;background:#0e0f13;border:1px solid #1d1f27;border-radius:8px;margin-bottom:0.3rem;font-size:0.81rem;">
                     <span style="color:{color};font-weight:700;font-size:0.8rem;">{'✓' if success else '✗'}</span>
                     <span style="color:#e2e8f0;font-weight:600;min-width:110px;">{tool}</span>
-                    <span style="color:#1e2b3c;">›</span>
+                    <span style="color:#1d1f27;">›</span>
                     <span style="color:#64748b;">{agent}</span>
                     <span style="color:#334155;margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:0.75rem;">{latency:.3f}s</span>
                 </div>
@@ -1105,14 +1135,14 @@ elif page == "Memory & Tools":
                     df.sort_values("Calls", ascending=True),
                     x="Calls", y="Tool", orientation="h",
                     color="Calls",
-                    color_continuous_scale=["#0f1f3d", "#3b82f6"],
+                    color_continuous_scale=["#3a2a08", "#f5a623"],
                 )
                 fig.update_layout(
-                    plot_bgcolor="#080c14", paper_bgcolor="#080c14",
+                    plot_bgcolor="#0a0b0e", paper_bgcolor="#0a0b0e",
                     font_color="#64748b", showlegend=False,
                     coloraxis_showscale=False,
                     margin=dict(l=0, r=0, t=8, b=0),
-                    xaxis=dict(gridcolor="#1e2b3c", zeroline=False),
+                    xaxis=dict(gridcolor="#1d1f27", zeroline=False),
                     yaxis=dict(gridcolor="rgba(0,0,0,0)"),
                     height=200,
                 )
@@ -1143,7 +1173,7 @@ elif page == "Analytics":
     else:
         # KPIs
         k1, k2, k3, k4, k5 = st.columns(5)
-        k1.markdown(metric_card("Total Tasks",      str(agg["total_tasks"]),                   accent="#6366f1"), unsafe_allow_html=True)
+        k1.markdown(metric_card("Total Tasks",      str(agg["total_tasks"]),                   accent="#f5a623"), unsafe_allow_html=True)
         k2.markdown(metric_card("Completed",         str(agg["completed_tasks"]),               accent="#10b981"), unsafe_allow_html=True)
         k3.markdown(metric_card("Total Cost",        f"${agg['total_cost_usd']:.4f}",           accent="#8b5cf6"), unsafe_allow_html=True)
         k4.markdown(metric_card("Avg Cost / Task",   f"${agg['avg_cost_usd']:.4f}",             accent="#f59e0b"), unsafe_allow_html=True)
@@ -1164,11 +1194,11 @@ elif page == "Analytics":
                     df_m  = pd.DataFrame([{"Model": m, "Tokens": t} for m, t in model_usage.items()])
                     fig_m = px.pie(
                         df_m, names="Model", values="Tokens",
-                        color_discrete_sequence=["#3b82f6", "#10b981", "#a78bfa", "#f59e0b"],
+                        color_discrete_sequence=["#f5a623", "#10b981", "#a78bfa", "#38bdf8"],
                         hole=0.55,
                     )
                     fig_m.update_layout(
-                        plot_bgcolor="#080c14", paper_bgcolor="#0f1623",
+                        plot_bgcolor="#0a0b0e", paper_bgcolor="#0e0f13",
                         font_color="#64748b", showlegend=True,
                         legend=dict(font=dict(color="#64748b", size=11)),
                         margin=dict(l=0, r=0, t=10, b=0),
@@ -1182,7 +1212,7 @@ elif page == "Analytics":
                         rate = MODEL_COST_PER_1K.get(model, 0.010)
                         cost = tokens * rate / 1000
                         st.markdown(
-                            f'<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.81rem;padding:0.35rem 0.5rem;border-bottom:1px solid #1e2b3c;">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.81rem;padding:0.35rem 0.5rem;border-bottom:1px solid #1d1f27;">'
                             f'<span style="color:#64748b;">{model}</span>'
                             f'<span style="color:#e2e8f0;font-family:monospace;">{tokens:,} tok'
                             f'<span style="color:#334155;"> ≈ </span>${cost:.4f}</span>'
@@ -1210,11 +1240,11 @@ elif page == "Analytics":
                         color_continuous_scale=["#0a1f14", "#10b981"],
                     )
                     fig_t.update_layout(
-                        plot_bgcolor="#080c14", paper_bgcolor="#0f1623",
+                        plot_bgcolor="#0a0b0e", paper_bgcolor="#0e0f13",
                         font_color="#64748b", showlegend=False,
                         coloraxis_showscale=False,
                         margin=dict(l=0, r=0, t=8, b=0),
-                        xaxis=dict(gridcolor="#1e2b3c", zeroline=False),
+                        xaxis=dict(gridcolor="#1d1f27", zeroline=False),
                         yaxis=dict(gridcolor="rgba(0,0,0,0)"),
                         height=240,
                     )
@@ -1232,7 +1262,7 @@ elif page == "Analytics":
         p1, p2, p3, p4 = st.columns(4)
         p1.markdown(metric_card("Avg Tokens / Task",  f"{agg['avg_tokens']:,}",             accent="#8b5cf6"), unsafe_allow_html=True)
         p2.markdown(metric_card("Avg Review Score",   f"{agg['avg_reviewer_score']:.2f}",   accent="#10b981"), unsafe_allow_html=True)
-        p3.markdown(metric_card("Avg Wall Time",      f"{agg['avg_wall_time_s']:.1f}s",     accent="#6366f1"), unsafe_allow_html=True)
+        p3.markdown(metric_card("Avg Wall Time",      f"{agg['avg_wall_time_s']:.1f}s",     accent="#f5a623"), unsafe_allow_html=True)
         p4.markdown(metric_card("Failed Tasks",       str(agg["failed_tasks"]),             accent="#ef4444"), unsafe_allow_html=True)
 
         if agg["escalated_tasks"] > 0:
