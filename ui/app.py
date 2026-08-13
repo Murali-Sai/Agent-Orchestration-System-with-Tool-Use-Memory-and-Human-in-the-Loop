@@ -17,7 +17,16 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-if st.session_state.get("active_task"):
+# Poll while a task is in flight. This runs before the submit handler sets
+# `active_task`, so the submit itself must st.rerun() — otherwise the component
+# is never mounted on that pass and the panel freezes at "planning 0/0" while
+# the task finishes server-side. Stop polling once the task reaches a terminal
+# state so a finished page isn't re-requesting every 3 seconds forever.
+_TERMINAL_STATES = {"done", "failed", "escalated"}
+if (
+    st.session_state.get("active_task")
+    and st.session_state.get("active_task_status") not in _TERMINAL_STATES
+):
     st_autorefresh(interval=3000, key="poll")
 
 # ════════════════════════════════════════════════════════════════════════
@@ -559,6 +568,11 @@ if page == "Submit Task":
         if resp:
             st.session_state["active_task"] = resp["task_id"]
             st.session_state["active_request"] = request
+            st.session_state["active_task_status"] = None
+            # Rerun so the autorefresh component at the top of the script sees
+            # active_task and starts polling; without this the panel renders
+            # once and never updates.
+            st.rerun()
         else:
             st.error("Failed to submit task — is the API running?")
 
@@ -570,6 +584,9 @@ if page == "Submit Task":
             st.warning("Could not reach API.")
         else:
             status      = s.get("status", "unknown")
+            # Recorded so the poller at the top of the script can stop once the
+            # task is finished.
+            st.session_state["active_task_status"] = status
             completed   = s.get("completed", 0)
             total       = s.get("total", 0)
             tokens      = s.get("total_tokens", 0)
@@ -594,6 +611,7 @@ if page == "Submit Task":
                 if st.button("Clear", use_container_width=True):
                     st.session_state.pop("active_task", None)
                     st.session_state.pop("active_request", None)
+                    st.session_state.pop("active_task_status", None)
                     st.rerun()
 
             # Metrics
