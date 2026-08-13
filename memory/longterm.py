@@ -47,6 +47,20 @@ def _frequency_boost(access_count: int) -> float:
     return min(_MAX_FREQUENCY_BOOST, math.log1p(access_count) * 0.08)
 
 
+def _as_float(raw: Any, default: float) -> float:
+    """Coerce a stored numeric to float, falling back only when it is missing.
+
+    Deliberately not `float(raw or default)`: 0.0 is falsy, and a stored
+    importance of 0.0 is a real value, not an absent one.
+    """
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 def _parse_embedding(raw: Any) -> list[float] | None:
     """Normalise an embedding column into a Python list of floats.
 
@@ -213,7 +227,10 @@ class LongTermMemory:
                     "id":           r["id"],
                     "content":      r["content"],
                     "metadata":     r.get("metadata", {}),
-                    "importance":   round(float(r.get("importance") or 0.5), 3),
+                    # `x or default` would rewrite a legitimately-stored 0.0 as
+                    # the default, hiding low-importance memories behind a
+                    # plausible-looking 0.5. Only None should fall back.
+                    "importance":   round(_as_float(r.get("importance"), 0.5), 3),
                     "access_count": int(r.get("access_count") or 0),
                 }
                 for r in (resp.data or [])
@@ -315,12 +332,17 @@ class LongTermMemory:
             group = [i] + dupes
             keeper_idx = max(
                 group,
-                key=lambda k: (entries[k].get("importance") or 0.0, entries[k].get("ts") or 0.0),
+                key=lambda k: (
+                    _as_float(entries[k].get("importance"), 0.0),
+                    _as_float(entries[k].get("ts"), 0.0),
+                ),
             )
             keeper = entries[keeper_idx]
             loser_ids = [entries[k]["id"] for k in group if k != keeper_idx]
 
-            new_importance = min(1.0, (keeper.get("importance") or 0.5) + 0.05 * len(loser_ids))
+            new_importance = min(
+                1.0, _as_float(keeper.get("importance"), 0.5) + 0.05 * len(loser_ids)
+            )
             try:
                 self._sb.table("memory_embeddings").update(
                     {"importance": new_importance}

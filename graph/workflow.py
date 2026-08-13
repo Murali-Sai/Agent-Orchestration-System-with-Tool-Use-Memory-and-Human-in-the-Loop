@@ -9,7 +9,7 @@ from typing import Literal
 from langgraph.graph import StateGraph, END
 
 from graph.state import AgentState, SubTask
-from agents.supervisor import plan_task, synthesize_results
+from agents.supervisor import plan_task, synthesize_results, save_task_memory
 from agents.specialists import run_specialist
 from agents.reviewer import review_output
 from agents.base import trace_event, token_cost_usd
@@ -216,6 +216,14 @@ def node_rework(state: AgentState) -> AgentState:
 
 def node_finalize(state: AgentState) -> AgentState:
     state["status"] = "done"
+
+    # Write long-term memory here rather than during synthesis: the reviewer
+    # score is only known now, and it's what weights the memory's importance.
+    # A failed save must not fail the task.
+    try:
+        save_task_memory(state, _get_ltm())
+    except Exception as e:
+        state["errors"].append(f"memory_save_failed: {e}")
 
     # ── Cost calculation ─────────────────────────────────────────────────── #
     total_cost = sum(

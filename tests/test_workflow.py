@@ -310,6 +310,48 @@ class TestReworkEndToEnd:
         assert result["status"] == "escalated"
         assert len([e for e in result["escalations"] if e["trigger"] == "low_review_score"]) == 2
 
+    def test_memory_is_saved_once_with_the_real_review_score(self):
+        """Importance is reviewer_score x complexity, so the write has to happen
+        after review — during synthesis the score is still its initial 0.0."""
+        saved = []
+
+        class _RecordingLTM:
+            def query(self, *a, **kw):
+                return []
+
+            def save(self, content, metadata=None):
+                saved.append((content, metadata or {}))
+                return "mem-id"
+
+        llms = _ScriptedLLMs(scores=[0.90])
+        with patch("graph.workflow._get_ltm", lambda: _RecordingLTM()):
+            result = llms.run()
+
+        assert result["status"] == "done"
+        assert len(saved) == 1, "exactly one memory per task"
+        _, meta = saved[0]
+        assert meta["reviewer_score"] == 0.90
+        assert meta["importance"] > 0, "importance must reflect the score, not 0.0"
+
+    def test_reworked_task_still_saves_only_one_memory(self):
+        """Synthesis runs twice on a rework; the memory write must not."""
+        saved = []
+
+        class _RecordingLTM:
+            def query(self, *a, **kw):
+                return []
+
+            def save(self, content, metadata=None):
+                saved.append(metadata or {})
+                return "mem-id"
+
+        llms = _ScriptedLLMs(scores=[0.30, 0.88])
+        with patch("graph.workflow._get_ltm", lambda: _RecordingLTM()):
+            llms.run()
+
+        assert len(saved) == 1
+        assert saved[0]["reviewer_score"] == 0.88
+
     def test_passing_score_never_reworks(self):
         llms = _ScriptedLLMs(scores=[0.95])
         result = llms.run()

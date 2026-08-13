@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from memory.working import WorkingMemory
 from memory.longterm import (
     LongTermMemory,
+    _as_float,
     _frequency_boost,
     _parse_embedding,
     _MAX_FREQUENCY_BOOST,
@@ -256,6 +257,49 @@ class TestConsolidate:
         ]
         ltm = _ltm_with_rows(rows)
         ltm.consolidate()   # must not raise
+
+
+class TestAsFloat:
+    """`x or default` silently rewrites a stored 0.0 as the default, which hid
+    genuinely-zero importance scores behind a plausible-looking 0.5."""
+
+    def test_zero_is_preserved_not_defaulted(self):
+        assert _as_float(0.0, 0.5) == 0.0
+        assert _as_float("0.0", 0.5) == 0.0
+        assert _as_float(0, 0.5) == 0.0
+
+    def test_missing_falls_back(self):
+        assert _as_float(None, 0.5) == 0.5
+
+    def test_garbage_falls_back(self):
+        assert _as_float("abc", 0.5) == 0.5
+        assert _as_float([], 0.5) == 0.5
+
+    def test_normal_values_pass_through(self):
+        assert _as_float(0.9, 0.5) == 0.9
+        assert _as_float("0.75", 0.5) == 0.75
+
+
+class TestConsolidateImportanceEdgeCases:
+    def test_zero_importance_keeper_gets_small_bump_not_default(self):
+        """A 0.0-importance survivor should end at 0.05, not 0.55."""
+        rows = [
+            {"id": "a", "content": "x", "embedding": [1.0, 0.0], "ts": 1.0, "importance": 0.0},
+            {"id": "b", "content": "x", "embedding": [1.0, 0.0], "ts": 2.0, "importance": 0.0},
+        ]
+        ltm = _ltm_with_rows(rows)
+        assert ltm.consolidate(similarity_threshold=0.95) == 1
+        keeper_id = next(iter(ltm._sb.updated))
+        assert ltm._sb.updated[keeper_id]["importance"] == pytest.approx(0.05)
+
+    def test_ties_break_on_recency(self):
+        rows = [
+            {"id": "old", "content": "x", "embedding": [1.0, 0.0], "ts": 1.0, "importance": 0.4},
+            {"id": "new", "content": "x", "embedding": [1.0, 0.0], "ts": 99.0, "importance": 0.4},
+        ]
+        ltm = _ltm_with_rows(rows)
+        ltm.consolidate(similarity_threshold=0.95)
+        assert ltm._sb.deleted == ["old"]
 
 
 class TestParseEmbedding:

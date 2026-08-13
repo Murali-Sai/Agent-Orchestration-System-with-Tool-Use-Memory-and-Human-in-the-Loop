@@ -104,7 +104,11 @@ def plan_task(state: AgentState, ltm: LongTermMemory) -> AgentState:
 
 
 def synthesize_results(state: AgentState, ltm: LongTermMemory) -> AgentState:
-    """Combine all specialist outputs into the final response, then save to memory."""
+    """Combine all specialist outputs into the final response.
+
+    Memory is written later, in `save_task_memory()` — see the note there.
+    `ltm` stays in the signature for API compatibility with existing callers.
+    """
     completed = state["completed_subtasks"]
     results_ctx = "\n\n".join(
         f"### {st['specialist'].upper()} — {st['description']}\n{st['result']}"
@@ -123,21 +127,41 @@ def synthesize_results(state: AgentState, ltm: LongTermMemory) -> AgentState:
     state["final_output"] = content
     state["status"] = "reviewing"
 
-    # Persist to long-term memory with importance score
+    trace_event(state, "supervisor", "synthesis_done", {"output_len": len(content)})
+    return state
+
+
+def save_task_memory(state: AgentState, ltm: LongTermMemory) -> str:
+    """Persist a task summary to long-term memory, weighted by review score.
+
+    Called from `node_finalize`, not from synthesis. Importance is
+    `reviewer_score × average subtask complexity`, and at synthesis time the
+    reviewer hasn't run yet — `reviewer_score` is still its initial 0.0, so
+    every memory was being stored with importance 0.0 regardless of how good
+    the output actually was. (The `.get("reviewer_score", 0.5)` default never
+    helped: the key is always present, just zero.)
+
+    Writing here also means one memory per task rather than one per synthesis
+    pass — a reworked task used to store its summary twice.
+    """
+    completed = state["completed_subtasks"]
     tools_used = list({tc["tool"] for st in completed for tc in st.get("tool_calls", [])})
+
     complexity_weight = {"low": 0.5, "medium": 0.75, "high": 1.0}
-    avg_complexity = sum(complexity_weight.get(s.get("complexity", "medium"), 0.75) for s in completed) / max(len(completed), 1)
-    importance = round(state.get("reviewer_score", 0.5) * avg_complexity, 3)
-    ltm.save(
+    avg_complexity = sum(
+        complexity_weight.get(s.get("complexity", "medium"), 0.75) for s in completed
+    ) / max(len(completed), 1)
+
+    reviewer_score = float(state.get("reviewer_score") or 0.0)
+    importance = round(reviewer_score * avg_complexity, 3)
+
+    return ltm.save(
         f"Task: {state['original_request'][:200]} | Specialists: {[s['specialist'] for s in completed]} | Tools: {tools_used} | Confidence: {state['plan_confidence']}",
         metadata={
             "task_id": state["task_id"],
             "user_id": state["user_id"],
-            "importance": str(importance),
-            "reviewer_score": str(state.get("reviewer_score", 0.5)),
-            "tool_count": str(len(tools_used)),
+            "importance": importance,
+            "reviewer_score": reviewer_score,
+            "tool_count": len(tools_used),
         },
     )
-
-    trace_event(state, "supervisor", "synthesis_done", {"output_len": len(content)})
-    return state

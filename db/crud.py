@@ -179,13 +179,17 @@ def resolve_hitl_event(event_id: str, approved: bool,
         return False
     try:
         sb = get_supabase()
-        sb.table("hitl_events").update({
+        resp = sb.table("hitl_events").update({
             "status":          "approved" if approved else "rejected",
             "human_response":  response,
             "modified_output": modified_output,
             "resolved_at":     datetime.now(timezone.utc).isoformat(),
         }).eq("id", event_id).execute()
-        return True
+        # An UPDATE matching no rows still succeeds, so returning True here
+        # unconditionally reported unknown item ids as resolved. PostgREST
+        # returns the updated rows, so an empty list means "not found" and
+        # lets the caller fall through to the Redis queue (and then 404).
+        return bool(resp.data)
     except Exception as e:
         log.warning("supabase_hitl_resolve_failed", error=str(e))
         return False
