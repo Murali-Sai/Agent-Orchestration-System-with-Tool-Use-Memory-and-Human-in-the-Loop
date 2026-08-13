@@ -1047,7 +1047,10 @@ elif page == "Memory & Tools":
             After each task, the supervisor embeds a summary using
             <b style="color:#64748b">OpenAI text-embedding-3-small</b> and stores it in
             Supabase. Future tasks query this store via cosine similarity before planning —
-            so the system gets smarter over time. Memories decay over 30 days.
+            so the system gets smarter over time. Memories decay over 30 days, and every
+            retrieval raises a memory's importance, so the ones that keep proving useful
+            surface first. <b style="color:#64748b">Consolidate</b> merges near-duplicate
+            embeddings and credits the survivor.
         </div>
         """, unsafe_allow_html=True)
 
@@ -1070,12 +1073,16 @@ elif page == "Memory & Tools":
                         unsafe_allow_html=True)
         for m in mem_list:
             meta  = m.get("metadata", {})
-            imp   = float(meta.get("importance", 0.5))
-            ic    = "#10b981" if imp >= 0.7 else "#f59e0b" if imp >= 0.4 else "#334155"
+            # The stored column is authoritative — consolidation bumps it after
+            # write time, so metadata's copy can be stale.
+            imp    = float(m.get("importance", meta.get("importance", 0.5)))
+            reads  = int(m.get("access_count", 0))
+            ic     = "#10b981" if imp >= 0.7 else "#f59e0b" if imp >= 0.4 else "#334155"
             with st.expander(f"📌 {m['content'][:75]}…"):
                 st.markdown(
                     f'<div style="font-size:0.78rem;color:#64748b;margin-bottom:0.5rem;">'
                     f'Importance: <span style="color:{ic};font-weight:600;">{imp:.2f}</span>'
+                    f'&nbsp;·&nbsp; Retrieved: <span style="color:#64748b;font-weight:600;">{reads}×</span>'
                     f'&nbsp;·&nbsp; Task: <code style="font-size:0.75rem;">{meta.get("task_id","—")}</code>'
                     f'</div>',
                     unsafe_allow_html=True,

@@ -14,6 +14,17 @@ services:
       timeout: 3s
       retries: 5
 
+  # Distributed tracing backend. Open http://localhost:16686 after a task run
+  # to see the full supervisor → specialist → tool-call flame graph.
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped
+
   # ── Application services ─────────────────────────────────────────────── #
 
   api:
@@ -35,11 +46,14 @@ services:
       - FAST_MODEL=${FAST_MODEL:-gpt-4o-mini}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8501}
       - USE_CELERY=true   # real workers run in this compose stack
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
     volumes:
       - workspace_data:/app/workspace
     depends_on:
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     restart: unless-stopped
 
   celery_worker:
@@ -57,11 +71,14 @@ services:
       - MAX_RETRIES=${MAX_RETRIES:-2}
       - PRIMARY_MODEL=${PRIMARY_MODEL:-gpt-4o}
       - FAST_MODEL=${FAST_MODEL:-gpt-4o-mini}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
     volumes:
       - workspace_data:/app/workspace
     depends_on:
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     restart: unless-stopped
     deploy:
       replicas: 2   # scale with: docker compose up --scale celery_worker=4

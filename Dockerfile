@@ -12,8 +12,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Create workspace directory for file tools
-RUN mkdir -p /app/workspace /app/chroma_db
+# Create workspace directory for file tools. No vector-store directory is
+# needed — long-term memory lives in Supabase pgvector. The MCP server runs on
+# this image's own Python interpreter, so there's no Node/npx layer either.
+RUN mkdir -p /app/workspace
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app

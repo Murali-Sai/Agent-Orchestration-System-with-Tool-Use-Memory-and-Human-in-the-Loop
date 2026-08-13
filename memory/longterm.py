@@ -13,6 +13,7 @@ Architecture:
 - Graceful no-op degradation when Supabase or OpenAI are unavailable
 """
 from __future__ import annotations
+import json
 import math
 import time
 import uuid
@@ -26,10 +27,44 @@ _EMBED_MODEL = "text-embedding-3-small"
 _EMBED_DIM = 1536
 
 
+_MAX_FREQUENCY_BOOST = 0.3
+
+
 def _recency_weight(timestamp: float) -> float:
     """Exponential decay: 1.0 at creation, 0.5 after 30 days."""
     age_days = (time.time() - timestamp) / 86400.0
     return math.exp(-math.log(2) * age_days / _DECAY_HALF_LIFE_DAYS)
+
+
+def _frequency_boost(access_count: int) -> float:
+    """Importance bonus for often-retrieved memories.
+
+    Log-scaled and capped so the 50th access doesn't count for much more than
+    the 5th — otherwise a single popular memory would crowd out everything else.
+    """
+    if access_count <= 0:
+        return 0.0
+    return min(_MAX_FREQUENCY_BOOST, math.log1p(access_count) * 0.08)
+
+
+def _parse_embedding(raw: Any) -> list[float] | None:
+    """Normalise an embedding column into a Python list of floats.
+
+    PostgREST serialises pgvector as a JSON *string* (`"[0.1,0.2,...]"`) rather
+    than an array, so rows fetched via the table API need decoding before any
+    numeric work.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (ValueError, TypeError):
+            return None
+    try:
+        return [float(x) for x in raw]
+    except (TypeError, ValueError):
+        return None
 
 
 def _get_embedding(text: str) -> list[float] | None:
@@ -52,8 +87,7 @@ class LongTermMemory:
     rest of the system continues without error — same behaviour as before.
     """
 
-    def __init__(self, persist_dir: str = "./chroma_db", collection: str = "agent_memory"):
-        # persist_dir / collection kept for API compatibility — unused by pgvector.
+    def __init__(self):
         self._enabled = False
         self._sb = None
         try:
@@ -102,7 +136,11 @@ class LongTermMemory:
     def query(self, query: str, n_results: int = 5, where: dict | None = None) -> list[dict]:
         """Retrieve semantically similar memories, re-ranked by composite score.
 
-        Composite score = cosine_relevance × importance_weight × recency_weight
+        Composite score = cosine_relevance × importance_weight × recency_weight,
+        where importance is the stored score plus a boost for how often the
+        memory has actually been retrieved. Frequently-surfaced memories are
+        empirically more useful than their write-time score suggests.
+
         The `where` parameter is accepted for API compatibility but ignored
         (filtering can be added via Postgres function args if needed).
         """
@@ -126,24 +164,41 @@ class LongTermMemory:
         scored = []
         for row in rows:
             cosine_relevance = float(row.get("similarity", 0))
-            importance = float(row.get("importance", 0.5))
+            base_importance = float(row.get("importance", 0.5))
+            access_count = int(row.get("access_count") or 0)
             ts = float(row.get("ts", time.time()))
             recency = _recency_weight(ts)
+
+            effective_importance = min(1.0, base_importance + _frequency_boost(access_count))
+
             composite = round(
-                cosine_relevance * (0.5 + 0.5 * importance) * (0.7 + 0.3 * recency), 4
+                cosine_relevance * (0.5 + 0.5 * effective_importance) * (0.7 + 0.3 * recency), 4
             )
             scored.append({
                 "id":              row["id"],
                 "content":         row["content"],
                 "metadata":        row.get("metadata", {}),
                 "relevance":       round(cosine_relevance, 3),
-                "importance":      round(importance, 3),
+                "importance":      round(effective_importance, 3),
+                "base_importance": round(base_importance, 3),
+                "access_count":    access_count,
                 "recency_weight":  round(recency, 3),
                 "composite_score": composite,
             })
 
         scored.sort(key=lambda x: x["composite_score"], reverse=True)
-        return scored[:n_results]
+        top = scored[:n_results]
+
+        # Only count memories that were actually handed to an agent, not every
+        # candidate the vector search considered. Failures here must not break
+        # retrieval, so they're swallowed per-row.
+        for m in top:
+            try:
+                self._sb.rpc("increment_access", {"mem_id": m["id"]}).execute()
+            except Exception as e:
+                log.debug("memory_access_increment_failed", id=m["id"], error=str(e))
+
+        return top
 
     def list_all(self, limit: int = 50) -> list[dict]:
         """Return up to `limit` memories sorted by timestamp descending."""
@@ -151,10 +206,16 @@ class LongTermMemory:
             return []
         try:
             resp = self._sb.table("memory_embeddings").select(
-                "id, content, metadata, ts, importance"
+                "id, content, metadata, ts, importance, access_count"
             ).order("ts", desc=True).limit(limit).execute()
             return [
-                {"id": r["id"], "content": r["content"], "metadata": r.get("metadata", {})}
+                {
+                    "id":           r["id"],
+                    "content":      r["content"],
+                    "metadata":     r.get("metadata", {}),
+                    "importance":   round(float(r.get("importance") or 0.5), 3),
+                    "access_count": int(r.get("access_count") or 0),
+                }
                 for r in (resp.data or [])
             ]
         except Exception as e:
@@ -191,12 +252,89 @@ class LongTermMemory:
             return 0
 
     def consolidate(self, similarity_threshold: float = 0.95) -> int:
-        """Near-duplicate removal — handled at query time via similarity threshold.
+        """Merge near-duplicate memories. Returns the number deleted.
 
-        Returns 0 (no-op). Deduplication can be added as a scheduled Postgres
-        function if needed in future.
+        For each cluster of memories with cosine similarity >= the threshold,
+        the highest-importance member survives (tie-break: most recent) and the
+        rest are deleted. The survivor gets a small importance bump for having
+        been independently corroborated.
+
+        This is O(n²) in Python — fine for the hundreds of memories a demo
+        accumulates. At real scale you'd push it into Postgres as a self-join
+        over an ivfflat/HNSW index instead of pulling every vector into memory.
         """
-        return 0
+        if not self._enabled:
+            return 0
+
+        try:
+            resp = self._sb.table("memory_embeddings").select(
+                "id, content, embedding, metadata, ts, importance"
+            ).execute()
+            rows = resp.data or []
+        except Exception as e:
+            log.warning("consolidate_fetch_failed", error=str(e))
+            return 0
+
+        # Rows whose embedding won't parse can't be compared — drop them from
+        # consideration rather than crashing the whole pass.
+        parsed: list[tuple[dict, list[float]]] = []
+        for r in rows:
+            vec = _parse_embedding(r.get("embedding"))
+            if vec is not None:
+                parsed.append((r, vec))
+
+        if len(parsed) < 2:
+            return 0
+
+        try:
+            import numpy as np
+        except ImportError:
+            log.warning("consolidate_unavailable", reason="numpy not installed")
+            return 0
+
+        entries = [r for r, _ in parsed]
+        vecs = np.array([v for _, v in parsed], dtype=float)
+        norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0          # guard against a zero vector
+        unit = vecs / norms
+        sim = unit @ unit.T
+
+        merged: set[str] = set()
+        removed = 0
+
+        for i, entry in enumerate(entries):
+            if entry["id"] in merged:
+                continue
+            dupes = [
+                j for j in range(i + 1, len(entries))
+                if entries[j]["id"] not in merged and sim[i, j] >= similarity_threshold
+            ]
+            if not dupes:
+                continue
+
+            group = [i] + dupes
+            keeper_idx = max(
+                group,
+                key=lambda k: (entries[k].get("importance") or 0.0, entries[k].get("ts") or 0.0),
+            )
+            keeper = entries[keeper_idx]
+            loser_ids = [entries[k]["id"] for k in group if k != keeper_idx]
+
+            new_importance = min(1.0, (keeper.get("importance") or 0.5) + 0.05 * len(loser_ids))
+            try:
+                self._sb.table("memory_embeddings").update(
+                    {"importance": new_importance}
+                ).eq("id", keeper["id"]).execute()
+                self._sb.table("memory_embeddings").delete().in_("id", loser_ids).execute()
+            except Exception as e:
+                log.warning("consolidate_merge_failed", keeper=keeper["id"], error=str(e))
+                continue
+
+            merged.update(loser_ids)
+            removed += len(loser_ids)
+
+        log.info("memories_consolidated", removed=removed, scanned=len(entries))
+        return removed
 
     def count(self) -> int:
         if not self._enabled:

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # run, so this MUST stay False on hosts with Redis but no worker (Render free).
     use_celery: bool = False
 
+    # MCP — discovery spawns a subprocess per server at first tool use, so it
+    # can be turned off on constrained hosts without touching the registry.
+    enable_mcp: bool = True
+    mcp_servers: str = "workspace"   # comma-separated
+
     # App
     app_env: str = "development"
     log_level: str = "INFO"

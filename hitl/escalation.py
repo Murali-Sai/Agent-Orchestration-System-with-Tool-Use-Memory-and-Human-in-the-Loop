@@ -54,21 +54,47 @@ def check_sensitive_operation(state: AgentState, subtask_description: str) -> Es
 
 
 def check_review_quality(state: AgentState) -> EscalationEvent | None:
-    if state["reviewer_score"] < settings.quality_threshold:
-        return _make_event(
-            state,
-            trigger="low_review_score",
-            level="approve_action",
-            context={
-                "score": state["reviewer_score"],
-                "threshold": settings.quality_threshold,
-                "feedback": state["reviewer_feedback"],
-            },
-        )
-    return None
+    """Handle a below-threshold review score.
+
+    The first low score is recorded but does NOT pause the graph — the workflow
+    gets one automatic rework pass at the specialists first. Pausing here would
+    set `awaiting_human`, which `route_after_review` checks before it looks at
+    the score, sending the task straight to END and making rework unreachable.
+
+    A second low score means rework didn't help, so a human is pulled in.
+    Returns the event only when it actually wants human attention; returning
+    None keeps the item out of the approval queue on the auto-retry pass.
+    """
+    if state["reviewer_score"] >= settings.quality_threshold:
+        return None
+
+    prior_attempts = len([e for e in state["escalations"] if e["trigger"] == "low_review_score"])
+    needs_human = prior_attempts >= 1
+
+    event = _make_event(
+        state,
+        trigger="low_review_score",
+        level="approve_action",
+        context={
+            "score": state["reviewer_score"],
+            "threshold": settings.quality_threshold,
+            "feedback": state["reviewer_feedback"],
+            "attempt": prior_attempts + 1,
+            "auto_rework": not needs_human,
+        },
+        pause=needs_human,
+    )
+    return event if needs_human else None
 
 
-def _make_event(state: AgentState, trigger: str, level: EscalationLevel, context: dict) -> EscalationEvent:
+def _make_event(
+    state: AgentState,
+    trigger: str,
+    level: EscalationLevel,
+    context: dict,
+    pause: bool = True,
+) -> EscalationEvent:
+    """Record an escalation. `pause=False` logs it without halting the graph."""
     event: EscalationEvent = {
         "trigger": trigger,
         "level": level,
@@ -78,6 +104,7 @@ def _make_event(state: AgentState, trigger: str, level: EscalationLevel, context
         "timestamp": time.time(),
     }
     state["escalations"].append(event)
-    state["awaiting_human"] = True
-    state["status"] = "escalated"
+    if pause:
+        state["awaiting_human"] = True
+        state["status"] = "escalated"
     return event

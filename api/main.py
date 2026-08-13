@@ -15,15 +15,21 @@ from db import crud as db
 from db.client import is_enabled as supabase_enabled
 from config.settings import get_settings
 from config.logging_config import configure_logging
+from config.tracing import configure_tracing, instrument_fastapi, tracer
 
 settings = get_settings()
 configure_logging(settings.log_level)
+configure_tracing()
 
 app = FastAPI(
     title="Agent Orchestration System with Tool Use, Memory, and Human-in-the-Loop",
     version="2.0.0",
     description="Production-grade multi-agent platform: supervisor decomposes tasks, specialists execute with real tools, persistent memory improves over time, and humans stay in the loop for critical decisions.",
 )
+
+# Auto-instrument HTTP handlers so agent spans nest under the request that
+# started them. No-ops if the instrumentation package isn't installed.
+instrument_fastapi(app)
 
 _cors_origins = (
     ["*"] if settings.cors_origins.strip() == "*"
@@ -86,17 +92,33 @@ class ResolveRequest(BaseModel):
 # ── Task runner ── #
 
 def _run_task_thread(task_id: str, state: AgentState) -> None:
-    """Fallback: run graph in a daemon thread (used when Celery is unavailable)."""
-    try:
-        graph = get_graph()
-        result = graph.invoke(state)
-        _tasks[task_id] = result
-        db.upsert_task(result)
-    except Exception as e:
-        state["status"] = "failed"
-        state["errors"].append(str(e))
-        _tasks[task_id] = state
-        db.upsert_task(state)
+    """Fallback: run graph in a daemon thread (used when Celery is unavailable).
+
+    The span starts a new trace rather than continuing the submitting request's:
+    the HTTP handler returns as soon as the task is dispatched, so nesting the
+    whole agent run under it would produce a request span that outlives its
+    own response.
+    """
+    with tracer.start_as_current_span("agent_task") as span:
+        span.set_attribute("task.id", task_id)
+        span.set_attribute("task.user_id", state.get("user_id", ""))
+        try:
+            graph = get_graph()
+            result = graph.invoke(state)
+            _tasks[task_id] = result
+            db.upsert_task(result)
+            span.set_attribute("task.status", result.get("status", "unknown"))
+            span.set_attribute("task.reviewer_score", result.get("reviewer_score", 0.0))
+            span.set_attribute("task.total_tokens", result.get("total_tokens", 0))
+            span.set_attribute("task.cost_usd", result.get("cost_usd", 0.0))
+            span.set_attribute("task.escalations", len(result.get("escalations", [])))
+        except Exception as e:
+            span.record_exception(e)
+            span.set_attribute("task.status", "failed")
+            state["status"] = "failed"
+            state["errors"].append(str(e))
+            _tasks[task_id] = state
+            db.upsert_task(state)
 
 
 def _dispatch_task(task_id: str, state: AgentState) -> str:
@@ -183,28 +205,40 @@ def get_trace(task_id: str):
 
 @app.get("/tasks")
 def list_tasks_route(user_id: Optional[str] = None):
+    """List tasks from Supabase and the in-process store, merged.
+
+    Both sources are always consulted: Supabase is the durable record, but a
+    task that is still running (or was created while Supabase was unreachable)
+    only exists in `_tasks`. Reading just one source made this endpoint return
+    an empty list whenever Supabase was configured but unreachable.
+    """
+    results: list[dict] = []
+    seen: set[str] = set()
+
     if supabase_enabled():
-        rows = db.list_tasks(user_id=user_id)
-        return [
-            {
+        for r in db.list_tasks(user_id=user_id):
+            seen.add(r["id"])
+            results.append({
                 "task_id":    r["id"],
                 "status":     r["status"],
                 "request":    r["original_request"][:100],
                 "created_at": r.get("created_at"),
                 "cost_usd":   r.get("cost_usd", 0.0),
-            }
-            for r in rows
-        ]
-    return [
-        {
+            })
+
+    for tid, s in _tasks.items():
+        if tid in seen:
+            continue
+        if user_id and s["user_id"] != user_id:
+            continue
+        results.append({
             "task_id":  tid,
             "status":   s["status"],
             "request":  s["original_request"][:100],
             "cost_usd": s.get("cost_usd", 0.0),
-        }
-        for tid, s in _tasks.items()
-        if not user_id or s["user_id"] == user_id
-    ]
+        })
+
+    return results
 
 
 # ── Analytics ── #

@@ -186,6 +186,34 @@ def node_review(state: AgentState) -> AgentState:
     return state
 
 
+def node_rework(state: AgentState) -> AgentState:
+    """Reopen the plan for a second pass, injecting reviewer feedback into every
+    subtask so specialists actually address what the reviewer flagged.
+
+    This reworks *all* subtasks rather than only the weak one, because the
+    reviewer scores the synthesized whole and doesn't attribute weakness to a
+    specific specialist. Finer-grained rework would need the reviewer to also
+    return which section was weak.
+    """
+    feedback = state.get("reviewer_feedback") or "No specific feedback given — improve overall quality."
+    trace_event(state, "system", "rework_triggered", {
+        "feedback": feedback,
+        "previous_score": state["reviewer_score"],
+    })
+
+    note = f"REVIEWER FEEDBACK (address this in your revision): {feedback}"
+    for subtask in state["execution_plan"]:
+        subtask["status"] = "pending"
+        subtask["result"] = None
+        # Don't stack the same note twice if rework ever runs more than once
+        if note not in subtask.get("required_inputs", []):
+            subtask["required_inputs"] = subtask.get("required_inputs", []) + [note]
+
+    state["completed_subtasks"] = []
+    state["status"] = "executing"
+    return state
+
+
 def node_finalize(state: AgentState) -> AgentState:
     state["status"] = "done"
 
@@ -229,14 +257,19 @@ def route_after_execute(state: AgentState) -> Literal["execute", "synthesize", "
     return "synthesize"
 
 
-def route_after_review(state: AgentState) -> Literal["finalize", "synthesize", "await_human"]:
+def route_after_review(state: AgentState) -> Literal["finalize", "rework", "await_human"]:
+    """Passing score → finalize. First failure → rework. Repeat failure → human.
+
+    The attempt counting lives in `check_review_quality`, which sets
+    `awaiting_human` only once an automatic rework pass has already been spent.
+    A low score with `awaiting_human` still False therefore means "first
+    failure, retry it".
+    """
     if state["awaiting_human"]:
         return "await_human"
     if state["reviewer_score"] >= settings.quality_threshold:
         return "finalize"
-    if len([e for e in state["escalations"] if e["trigger"] == "low_review_score"]) <= 1:
-        return "synthesize"
-    return "finalize"
+    return "rework"
 
 
 def node_await_human(state: AgentState) -> AgentState:
@@ -252,6 +285,7 @@ def build_graph() -> StateGraph:
 
     g.add_node("plan", node_plan)
     g.add_node("execute", node_execute)
+    g.add_node("rework", node_rework)
     g.add_node("synthesize", node_synthesize)
     g.add_node("review", node_review)
     g.add_node("finalize", node_finalize)
@@ -268,9 +302,10 @@ def build_graph() -> StateGraph:
     g.add_edge("synthesize", "review")
     g.add_conditional_edges("review", route_after_review, {
         "finalize": "finalize",
-        "synthesize": "synthesize",
+        "rework": "rework",
         "await_human": "await_human",
     })
+    g.add_edge("rework", "execute")   # loop back to the specialists with feedback
     g.add_edge("finalize", END)
     g.add_edge("await_human", END)
 

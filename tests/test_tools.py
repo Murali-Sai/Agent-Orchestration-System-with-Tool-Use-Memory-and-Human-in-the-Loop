@@ -116,3 +116,47 @@ class TestFileTools:
     def test_nonexistent_file_returns_error(self):
         result = read_file("does_not_exist_xyz.txt")
         assert "error" in result
+
+
+# ── OpenTelemetry ──────────────────────────────────────────────────────── #
+
+class TestTracing:
+    def test_tracer_is_usable_without_a_collector(self):
+        """Spans must be safe to create when nothing is configured to export."""
+        from config.tracing import get_tracer
+
+        with get_tracer().start_as_current_span("unit_test") as span:
+            span.set_attribute("attr", "value")   # must not raise
+
+    def test_configure_tracing_is_idempotent(self):
+        from config.tracing import configure_tracing
+
+        assert configure_tracing() is configure_tracing()
+
+    def test_export_flag_parsing(self):
+        from config.tracing import _truthy
+
+        assert _truthy("true") and _truthy("1") and _truthy("YES") and _truthy(" on ")
+        assert not _truthy("") and not _truthy(None) and not _truthy("false")
+
+    def test_tool_calls_are_traced(self):
+        """Registry spans should carry the attributes an operator would filter on."""
+        from unittest.mock import MagicMock, patch
+
+        registry = ToolRegistry()
+        registry.register("noop", "does nothing", lambda: "ok", allowed_agents=[])
+
+        span = MagicMock()
+        fake_tracer = MagicMock()
+        fake_tracer.start_as_current_span.return_value.__enter__.return_value = span
+
+        with patch("tools.registry.tracer", fake_tracer):
+            registry.call("noop", "research")
+
+        fake_tracer.start_as_current_span.assert_called_once_with("tool.noop")
+        recorded = {c.args[0]: c.args[1] for c in span.set_attribute.call_args_list}
+        assert recorded["tool.name"] == "noop"
+        assert recorded["tool.agent"] == "research"
+        assert recorded["tool.success"] is True
+        assert recorded["tool.outcome"] == "ok"
+        assert "tool.latency_s" in recorded

@@ -1,4 +1,5 @@
-# Start the system without Docker (uses in-memory fallbacks for Redis/ChromaDB)
+# Start the system without Docker. Redis falls back to in-process memory;
+# long-term memory needs SUPABASE_URL/SUPABASE_ANON_KEY or it no-ops.
 # Run from the project root
 
 $env:PYTHONPATH = Get-Location

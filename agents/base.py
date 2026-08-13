@@ -5,6 +5,7 @@ import uuid
 from typing import Any, Optional
 from openai import OpenAI
 from config.settings import get_settings
+from config.tracing import tracer
 
 settings = get_settings()
 
@@ -71,35 +72,51 @@ def llm_call(
     """Route to OpenAI or Anthropic based on model name. Returns (content, tokens)."""
     model = model or settings.primary_model
 
-    if model.startswith("claude-"):
-        client = _get_anthropic()
-        if client is None:
-            # Anthropic unavailable — fall back gracefully
-            model = settings.fast_model
-        else:
-            resp = client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system,
-                messages=messages,
-            )
-            content = resp.content[0].text
-            tokens = resp.usage.input_tokens + resp.usage.output_tokens
-            return content, tokens
+    with tracer.start_as_current_span("llm_call") as span:
+        span.set_attribute("llm.model_requested", model)
+        span.set_attribute("llm.max_tokens", max_tokens)
+        span.set_attribute("llm.temperature", temperature)
 
-    # ── OpenAI path ──
-    client = get_client()
-    full_messages = [{"role": "system", "content": system}] + messages
-    resp = client.chat.completions.create(
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        messages=full_messages,
-    )
-    content = resp.choices[0].message.content
-    tokens = resp.usage.prompt_tokens + resp.usage.completion_tokens
-    return content, tokens
+        if model.startswith("claude-"):
+            client = _get_anthropic()
+            if client is None:
+                # Anthropic unavailable — fall back gracefully
+                model = settings.fast_model
+                span.set_attribute("llm.fallback", "anthropic_unavailable")
+            else:
+                span.set_attribute("llm.provider", "anthropic")
+                span.set_attribute("llm.model", model)
+                resp = client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system,
+                    messages=messages,
+                )
+                content = resp.content[0].text
+                tokens = resp.usage.input_tokens + resp.usage.output_tokens
+                span.set_attribute("llm.tokens_used", tokens)
+                span.set_attribute("llm.cost_usd", token_cost_usd(model, tokens))
+                return content, tokens
+
+        # ── OpenAI path ──
+        span.set_attribute("llm.provider", "openai")
+        span.set_attribute("llm.model", model)
+        client = get_client()
+        full_messages = [{"role": "system", "content": system}] + messages
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=full_messages,
+        )
+        content = resp.choices[0].message.content
+        tokens = resp.usage.prompt_tokens + resp.usage.completion_tokens
+        span.set_attribute("llm.prompt_tokens", resp.usage.prompt_tokens)
+        span.set_attribute("llm.completion_tokens", resp.usage.completion_tokens)
+        span.set_attribute("llm.tokens_used", tokens)
+        span.set_attribute("llm.cost_usd", token_cost_usd(model, tokens))
+        return content, tokens
 
 
 def trace_event(state: dict, agent: str, action: str, detail: Any = None) -> None:

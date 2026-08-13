@@ -61,6 +61,16 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
+      # MCP tools run as a short-lived Python subprocess per call (no Node
+      # needed). Set to "false" if the 512 MB free instance shows memory
+      # pressure while several specialists run in parallel.
+      - key: ENABLE_MCP
+        value: "true"
+      - key: MCP_SERVERS
+        value: workspace
+      # No OTEL_* vars set: spans are created but not exported, so nothing
+      # extra is written to the Render log stream. Add
+      # OTEL_EXPORTER_OTLP_ENDPOINT to ship traces to a hosted collector.
       - key: PYTHONUNBUFFERED
         value: "1"
 

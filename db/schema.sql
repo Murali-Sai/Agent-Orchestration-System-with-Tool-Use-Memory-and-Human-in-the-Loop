@@ -76,27 +76,38 @@ CREATE TABLE IF NOT EXISTS hitl_events (
 
 -- Stores task summaries as vector embeddings for semantic recall
 CREATE TABLE IF NOT EXISTS memory_embeddings (
-    id          TEXT PRIMARY KEY,
-    content     TEXT NOT NULL,
-    embedding   vector(1536),           -- OpenAI text-embedding-3-small (1536 dims)
-    metadata    JSONB DEFAULT '{}',
-    ts          FLOAT DEFAULT 0,        -- unix epoch; used for recency decay scoring
-    importance  FLOAT DEFAULT 0.5,      -- 0–1 score from reviewer × complexity
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    id           TEXT PRIMARY KEY,
+    content      TEXT NOT NULL,
+    embedding    vector(1536),           -- OpenAI text-embedding-3-small (1536 dims)
+    metadata     JSONB DEFAULT '{}',
+    ts           FLOAT DEFAULT 0,        -- unix epoch; used for recency decay scoring
+    importance   FLOAT DEFAULT 0.5,      -- 0–1 score from reviewer × complexity
+    access_count INT DEFAULT 0,          -- times surfaced by query(); boosts importance
+    created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Cosine-similarity search function called by LongTermMemory.query()
+-- Migration for databases created before access_count existed. CREATE TABLE
+-- IF NOT EXISTS above is a no-op on an existing table, so the column has to be
+-- added explicitly for this file to stay safely re-runnable.
+ALTER TABLE memory_embeddings ADD COLUMN IF NOT EXISTS access_count INT DEFAULT 0;
+
+-- Cosine-similarity search function called by LongTermMemory.query().
+-- Dropped first because Postgres refuses to change a function's return type
+-- via CREATE OR REPLACE, and access_count was added to the result set.
+DROP FUNCTION IF EXISTS match_memories(vector(1536), int);
+
 CREATE OR REPLACE FUNCTION match_memories(
     query_embedding vector(1536),
     match_count     int DEFAULT 10
 )
 RETURNS TABLE (
-    id          TEXT,
-    content     TEXT,
-    metadata    JSONB,
-    ts          FLOAT,
-    importance  FLOAT,
-    similarity  FLOAT
+    id           TEXT,
+    content      TEXT,
+    metadata     JSONB,
+    ts           FLOAT,
+    importance   FLOAT,
+    access_count INT,
+    similarity   FLOAT
 )
 LANGUAGE plpgsql
 AS $$
@@ -108,10 +119,23 @@ BEGIN
         me.metadata,
         me.ts,
         me.importance,
+        me.access_count,
         (1 - (me.embedding <=> query_embedding))::FLOAT AS similarity
     FROM memory_embeddings me
     ORDER BY me.embedding <=> query_embedding
     LIMIT match_count;
+END;
+$$;
+
+-- Atomic access tracking, called once per memory actually surfaced to an agent.
+-- Done in SQL rather than read-modify-write from Python so concurrent task
+-- threads can't clobber each other's increments.
+CREATE OR REPLACE FUNCTION increment_access(mem_id TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE memory_embeddings SET access_count = access_count + 1 WHERE id = mem_id;
 END;
 $$;
 

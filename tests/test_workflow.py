@@ -1,10 +1,18 @@
 """Tests for agent state, task decomposition, escalation triggers, and graph routing."""
+import json
 import pytest
 import sys, os
+from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from graph.workflow import create_initial_state, build_graph
+from graph.workflow import (
+    create_initial_state,
+    build_graph,
+    node_rework,
+    route_after_review,
+)
 from graph.state import AgentState
+from agents.specialists import run_specialist
 from hitl.escalation import (
     check_plan_confidence,
     check_repeated_failure,
@@ -85,19 +93,36 @@ class TestEscalationTriggers:
         event = check_sensitive_operation(state, "research quantum computing trends")
         assert event is None
 
-    def test_low_review_score_escalates(self):
+    def test_first_low_review_score_records_but_does_not_pause(self):
+        """First failure is logged for audit but left to the automatic rework
+        pass — pausing here would make the rework branch unreachable."""
         state = self._make_state()
         state["reviewer_score"] = 0.4
         state["reviewer_feedback"] = "Output is incomplete"
         event = check_review_quality(state)
+        assert event is None                      # not queued for a human yet
+        assert state["awaiting_human"] is False   # graph keeps running
+        assert len(state["escalations"]) == 1     # but it is on the record
+        assert state["escalations"][0]["trigger"] == "low_review_score"
+        assert state["escalations"][0]["context"]["auto_rework"] is True
+
+    def test_second_low_review_score_escalates_to_human(self):
+        state = self._make_state()
+        state["reviewer_score"] = 0.4
+        state["reviewer_feedback"] = "Still incomplete"
+        check_review_quality(state)               # first pass → auto rework
+        event = check_review_quality(state)       # rework didn't help
         assert event is not None
         assert event["trigger"] == "low_review_score"
+        assert event["context"]["attempt"] == 2
+        assert state["awaiting_human"] is True
 
     def test_good_review_score_no_escalation(self):
         state = self._make_state()
         state["reviewer_score"] = 0.85
         event = check_review_quality(state)
         assert event is None
+        assert state["escalations"] == []
 
 
 # ── Graph Construction ─────────────────────────────────────────────────── #
@@ -113,6 +138,187 @@ class TestGraphConstruction:
         node_names = set(graph.nodes.keys()) if hasattr(graph, "nodes") else set()
         # If nodes aren't directly accessible, just verify it compiled
         assert graph is not None
+
+
+# ── Rework routing ─────────────────────────────────────────────────────── #
+
+class TestReworkLoop:
+    def _state_with_plan(self) -> AgentState:
+        state = create_initial_state("test", "user")
+        state["execution_plan"] = [{
+            "id": "st_1",
+            "description": "research something",
+            "specialist": "research",
+            "depends_on": [],
+            "required_inputs": [],
+            "expected_output": "findings",
+            "complexity": "low",
+            "status": "done",
+            "result": "weak first attempt",
+            "retries": 0,
+            "tool_calls": [],
+        }]
+        state["completed_subtasks"] = list(state["execution_plan"])
+        return state
+
+    def test_passing_score_finalizes(self):
+        state = self._state_with_plan()
+        state["reviewer_score"] = 0.9
+        assert route_after_review(state) == "finalize"
+
+    def test_first_low_score_routes_to_rework(self):
+        state = self._state_with_plan()
+        state["reviewer_score"] = 0.3
+        state["reviewer_feedback"] = "Needs more depth"
+        check_review_quality(state)
+        assert route_after_review(state) == "rework"
+
+    def test_second_low_score_routes_to_human(self):
+        state = self._state_with_plan()
+        state["reviewer_score"] = 0.3
+        check_review_quality(state)
+        check_review_quality(state)
+        assert route_after_review(state) == "await_human"
+
+    def test_rework_reopens_plan_with_feedback(self):
+        state = self._state_with_plan()
+        state["reviewer_score"] = 0.3
+        state["reviewer_feedback"] = "Missing cost analysis"
+
+        state = node_rework(state)
+
+        subtask = state["execution_plan"][0]
+        assert subtask["status"] == "pending"
+        assert subtask["result"] is None
+        assert state["completed_subtasks"] == []
+        assert any("REVIEWER FEEDBACK" in ri for ri in subtask["required_inputs"])
+        assert any("Missing cost analysis" in ri for ri in subtask["required_inputs"])
+        assert any(e["action"] == "rework_triggered" for e in state["trace"])
+
+    def test_rework_does_not_stack_duplicate_feedback(self):
+        state = self._state_with_plan()
+        state["reviewer_feedback"] = "Same note"
+        state = node_rework(state)
+        state = node_rework(state)
+        notes = [ri for ri in state["execution_plan"][0]["required_inputs"] if "REVIEWER FEEDBACK" in ri]
+        assert len(notes) == 1
+
+    def test_feedback_reaches_the_specialist_prompt(self):
+        """The rework note is useless unless run_specialist puts it in the message."""
+        state = self._state_with_plan()
+        state["reviewer_feedback"] = "Add benchmarks"
+        state = node_rework(state)
+        subtask = state["execution_plan"][0]
+
+        captured = {}
+
+        def _fake_llm_call(system, messages, model=None, max_tokens=4096, temperature=0.3):
+            captured["content"] = messages[0]["content"]
+            return "revised output", 10
+
+        with patch("agents.specialists.llm_call", _fake_llm_call):
+            run_specialist(state, subtask)
+
+        assert "REVIEWER FEEDBACK" in captured["content"]
+        assert "Add benchmarks" in captured["content"]
+
+
+# ── Rework through the real compiled graph ──────────────────────────────── #
+
+_E2E_PLAN = json.dumps({
+    "confidence": 0.9,
+    "reasoning": "simple",
+    "subtasks": [{
+        "id": "st_1",
+        "description": "Research agent frameworks",
+        "specialist": "research",
+        "depends_on": [],
+        "required_inputs": [],
+        "expected_output": "findings",
+        "complexity": "low",
+    }],
+})
+
+
+def _review_json(score: float, feedback: str = "") -> str:
+    return json.dumps({
+        "overall_score": score,
+        "completeness": score, "accuracy": score,
+        "clarity": score, "actionability": score,
+        "feedback": feedback,
+        "approved": score >= 0.65,
+    })
+
+
+class _ScriptedLLMs:
+    """Drives a full graph run with deterministic responses, recording the
+    prompts specialists actually received."""
+
+    def __init__(self, scores: list[float], feedback: str = "Missing cost analysis."):
+        self.scores = list(scores)
+        self.feedback = feedback
+        self.specialist_prompts: list[str] = []
+        self.review_calls = 0
+
+    def supervisor(self, system, messages, model=None, **kw):
+        if "SYNTHES" not in messages[0]["content"].upper() and "subtask" in system.lower():
+            return _E2E_PLAN, 100
+        return "# Final Answer\nSynthesized output.", 100
+
+    def specialist(self, system, messages, model=None, **kw):
+        self.specialist_prompts.append(messages[0]["content"])
+        return "Specialist findings.", 50
+
+    def reviewer(self, system, messages, model=None, **kw):
+        score = self.scores[min(self.review_calls, len(self.scores) - 1)]
+        self.review_calls += 1
+        return _review_json(score, self.feedback if score < 0.65 else ""), 40
+
+    def run(self, request: str = "Compare agent frameworks"):
+        with patch("agents.supervisor.llm_call", self.supervisor), \
+             patch("agents.specialists.llm_call", self.specialist), \
+             patch("agents.reviewer.llm_call", self.reviewer):
+            return build_graph().invoke(create_initial_state(request, "test_user"))
+
+
+class TestReworkEndToEnd:
+    def test_low_score_reworks_then_finalizes(self):
+        llms = _ScriptedLLMs(scores=[0.30, 0.92])
+        result = llms.run()
+
+        assert llms.review_calls == 2
+        assert len(llms.specialist_prompts) == 2, "specialist should run a second time"
+        assert result["status"] == "done"
+        assert result["awaiting_human"] is False
+        assert result["reviewer_score"] == 0.92
+
+        actions = [e["action"] for e in result["trace"]]
+        assert "rework_triggered" in actions
+        assert actions.count("subtask_done") == 2
+
+        reworked = [p for p in llms.specialist_prompts if "REVIEWER FEEDBACK" in p]
+        assert len(reworked) == 1
+        assert "Missing cost analysis" in reworked[0]
+
+    def test_persistent_low_score_escalates_without_looping(self):
+        llms = _ScriptedLLMs(scores=[0.30, 0.30])
+        result = llms.run()
+
+        assert llms.review_calls == 2, "exactly one rework pass, then stop"
+        assert len(llms.specialist_prompts) == 2
+        assert result["awaiting_human"] is True
+        assert result["status"] == "escalated"
+        assert len([e for e in result["escalations"] if e["trigger"] == "low_review_score"]) == 2
+
+    def test_passing_score_never_reworks(self):
+        llms = _ScriptedLLMs(scores=[0.95])
+        result = llms.run()
+
+        assert llms.review_calls == 1
+        assert len(llms.specialist_prompts) == 1
+        assert result["status"] == "done"
+        assert "rework_triggered" not in [e["action"] for e in result["trace"]]
+        assert not any("REVIEWER FEEDBACK" in p for p in llms.specialist_prompts)
 
 
 # ── HITL Queue ──────────────────────────────────────────────────────── #

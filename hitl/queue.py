@@ -15,15 +15,15 @@ _QUEUE_KEY = "hitl:queue"
 _RESOLVED_KEY = "hitl:resolved"
 _CHAT_PREFIX = "hitl:chat:"
 
-# In-memory fallback for chat messages when Redis is unavailable
-_local_chats: dict[str, list[dict]] = {}
-
 
 class ApprovalQueue:
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
         self._client = None
         self._local_queue: list[dict] = []
         self._local_resolved: list[dict] = []
+        # Chat fallback is per-instance, not module-global, so separate queues
+        # (and separate tests) don't leak messages into each other.
+        self._local_chats: dict[str, list[dict]] = {}
 
         if _REDIS_OK:
             try:
@@ -83,33 +83,44 @@ class ApprovalQueue:
                     return True
             return False
 
+    def _item_exists(self, item_id: str) -> bool:
+        """True if the item is in the pending queue or the resolved history.
+
+        Both backends apply the same rule, so a given item_id gets the same
+        answer whether or not Redis happens to be reachable — otherwise the
+        same request 404s locally and 200s in production.
+        """
+        if self._client:
+            for key in (_QUEUE_KEY, _RESOLVED_KEY):
+                for raw in self._client.lrange(key, 0, -1):
+                    if json.loads(raw)["id"] == item_id:
+                        return True
+            return False
+        return any(i["id"] == item_id for i in self._local_queue) or any(
+            i["id"] == item_id for i in self._local_resolved
+        )
+
     def add_message(self, item_id: str, role: str, message: str) -> bool:
         """Append a chat message to a HITL item. Returns False if item not found."""
+        if not self._item_exists(item_id):
+            return False
+
         msg = {"role": role, "message": message, "ts": time.time()}
-        chat_key = f"{_CHAT_PREFIX}{item_id}"
 
         if self._client:
-            # Verify item exists
-            raw_items = self._client.lrange(_QUEUE_KEY, 0, -1)
-            if not any(json.loads(r)["id"] == item_id for r in raw_items):
-                return False
+            chat_key = f"{_CHAT_PREFIX}{item_id}"
             self._client.rpush(chat_key, json.dumps(msg))
             self._client.expire(chat_key, 86400 * 7)  # 7-day TTL
-            return True
         else:
-            # In-memory fallback — accept any item_id
-            if item_id not in _local_chats:
-                _local_chats[item_id] = []
-            _local_chats[item_id].append(msg)
-            return True
+            self._local_chats.setdefault(item_id, []).append(msg)
+        return True
 
     def get_messages(self, item_id: str) -> list[dict]:
         """Retrieve the full chat thread for a HITL item."""
-        chat_key = f"{_CHAT_PREFIX}{item_id}"
         if self._client:
-            raw = self._client.lrange(chat_key, 0, -1)
+            raw = self._client.lrange(f"{_CHAT_PREFIX}{item_id}", 0, -1)
             return [json.loads(r) for r in raw]
-        return _local_chats.get(item_id, [])
+        return self._local_chats.get(item_id, [])
 
     def get_resolved(self, limit: int = 50) -> list[dict]:
         if self._client:

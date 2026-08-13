@@ -16,12 +16,14 @@ python-multipart>=0.0.12
 # Memory
 redis>=5.2.0
 psutil>=6.1.0
+numpy>=1.26.0        # cosine-similarity clustering in memory consolidation
 
 # Tools
 duckduckgo-search>=7.0.0
 tavily-python>=0.5.0
 requests>=2.32.0
 beautifulsoup4>=4.12.0
+mcp>=1.1.0           # MCP client bridge + in-repo stdio server (tools/mcp_server.py)
 
 # UI
 streamlit>=1.40.0
@@ -35,6 +37,13 @@ supabase>=2.0.0
 # Async task queue
 celery[redis]>=5.3.0
 flower>=2.0.0
+
+# Observability — spans are created always, exported only when configured
+# (OTEL_EXPORTER_OTLP_ENDPOINT for a collector, OTEL_CONSOLE_EXPORT for stdout)
+opentelemetry-api>=1.27.0
+opentelemetry-sdk>=1.27.0
+opentelemetry-exporter-otlp-proto-grpc>=1.27.0
+opentelemetry-instrumentation-fastapi>=0.48b0
 
 # Utilities
 python-dotenv>=1.0.0

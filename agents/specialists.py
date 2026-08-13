@@ -38,9 +38,22 @@ def run_specialist(state: AgentState, subtask: SubTask) -> SubTask:
     # Build context from completed dependencies
     dep_context = _build_dependency_context(subtask, state["completed_subtasks"])
 
+    # required_inputs carries planner-specified prerequisites and, on a rework
+    # pass, the reviewer's feedback — it has to reach the model or rework is a
+    # second identical LLM call.
+    inputs_note = ""
+    if subtask.get("required_inputs"):
+        inputs_note = "\n\nADDITIONAL REQUIREMENTS:\n" + "\n".join(
+            f"- {ri}" for ri in subtask["required_inputs"]
+        )
+
     messages = [{
         "role": "user",
-        "content": f"TASK: {subtask['description']}\nEXPECTED OUTPUT: {subtask['expected_output']}\n{dep_context}",
+        "content": (
+            f"TASK: {subtask['description']}\n"
+            f"EXPECTED OUTPUT: {subtask['expected_output']}\n"
+            f"{dep_context}{inputs_note}"
+        ),
     }]
 
     model = route_model(specialist, subtask.get("complexity"))
